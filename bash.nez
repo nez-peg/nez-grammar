@@ -1,0 +1,219 @@
+// PEG4d Bash file
+// Naming rule:
+// 1. The rule that creating a object is named in UpperCamelCase
+// 2. The rule that contains # or @ expression is named in lowerCamelCase
+// 3. Otherwise, it named in UPPER_CASE
+File                          = Block
+Chunk                         = Block
+S                             = [ \t]
+                              / COMMENT
+_                             = S*
+COMMENT                       = '#' ( !BREAK . )*
+BREAK                         = '\n'
+                              / '\r\n'
+                              / '\r'
+NL                            = ';'
+                              / BREAK
+                              / !.
+W                             = [a-zA-Z0-9_]
+FILENAME                      = ( ESCAPED_CHAR / !FORBIDDEN_CHAR ![\x00] . )+
+Statement                     = IfStatement
+                              / WhileStatement
+                              / UntilStatement
+                              / ForStatement
+                              / CaseStatement
+                              / DeclareStatement
+                              / LetStatement
+                              / !KEYWORD FunctionStatement
+                              / !KEYWORD Command
+                              / Expression
+Block                         = { ( _ $(Statement) _ )* #Block }
+conditionalExpression         = _ $(Expression) _ NL _
+IfStatement                   = { 'if' conditionalExpression 'then' _ NL $(Block) ( elseClause / elifClause )? _ 'fi' _ NL #IfStatement }
+elifClause                    = $(ElifBlock)
+ElifBlock                     = { $(ElifBody) #Block }
+ElifBody                      = { 'elif' conditionalExpression 'then' _ NL $(Block) ( elseClause / elifClause )? #IfStatement }
+elseClause                    = _ 'else' _ NL $(Block)
+doDoneBlock                   = 'do' _ NL $(Block) 'done' _
+WhileStatement                = { 'while' conditionalExpression doDoneBlock NL _ #WhileStatement }
+UntilStatement                = { 'until' conditionalExpression doDoneBlock NL _ #UntilStatement }
+ForStatement                  = { 'for' _ ($(Literal) _ 'in' _ $(Expression) / '((' _ $(Expression) _ NL _ $(Expression) _ NL _ $(Expression) _ '))') _ NL _ doDoneBlock NL _ #ForStatement }
+CaseStatement                 = { 'case' _ addCase #CaseStatement }
+addCase                       = $(PrimaryExpression) _ 'in' _ $(CaseMember) _ ( $(CaseMember) _ )* ($(LastCaseMember) / 'esac') _
+CaseMember                    = { $(Expression) ')' _ $(Statement) _ ( $(Statement) _ )* ';;' #CaseMember }
+LastCaseMember                = { $(Defualt) _ $(Statement) _ ( ('esac' / $(Statement)) _ )* #LastCaseMember }
+Defualt                       = { '*' #DefualtExpression } ')'
+DeclareStatement              = { 'declare' _ ('-i' #Num / '-a' #Array) _ $(Name) _ NL }
+                              / { 'declare' _ $(Name) _ NL #String }
+postfixExpression             = '++' #PrefixInc
+                              / '--' #PrefixDec
+LetStatement                  = { 'let' _ postfixExpression _ $(Name) _ NL }
+FunctionStatement             = { ($(FunctionDecl) / $(FunctionCall)) #functionStatement }
+FunctionDecl                  = { 'function'? S* $(FunctionName) '()' S* '{' S* $(Block) S* '}' #functionDecl }
+FunctionCall                  = { $(FunctionName) S* $(ArgList) S* #functionCall }
+FunctionName                  = { Name #functionName }
+ArgList                       = { ( $(Arg) S+ )+ #Args }
+Arg                           = { W+ #arg }
+Command                       = CommandExpr _ NL
+	// <new line>, ';', '&'
+CommandExpr                   = { $(CommandList) _ $(Background?) #command }
+Background                    = { '&' #background } _
+CommandList                   = OrList
+OrList                        = AndList {$ _ '||' _ $(AndList) #or }*
+AndList                       = PipedCommand {$ _ '&&' _ $(PipedCommand) #and }*
+PipedCommand                  = SingleCommand {$ _ '|' _ $(SingleCommand) #pipe }*
+SingleCommand                 = { $(CmdSymbolSeq) ( S* $(Redirect) / S* $(HereDoc) / S+ $(CommandArg) )* #singleCommand }
+Redirect                      = { $(RedirectOpArgLess) / $(RedirectOp) _ $(CommandArg) #redirect }
+RedirectOp                    = { NUMBER? '>>' / NUMBER? '>' / '&>>' / '&>' / '<<<' / '<' #redirectOp }
+RedirectOpArgLess             = { NUMBER '>&' NUMBER #redirectOp }
+NUMBER                        = '0'
+                              / [1-9] [0-9]*
+CmdSymbolSeq                  = { $(CmdSymbol)+ #commandName }
+CommandArg                    = { $(CmdSymbolEQ)+ #commandArg }
+CmdSymbol                     = CString
+                              / SubCmd
+                              / SubExpr
+                              / PathExpression
+                              / Identifier
+CmdSymbolEQ                   = CString
+                              / SubCmd
+                              / SubExpr
+                              / IdentifierEQ
+                              / Identifier
+SubCmd                        = '`' S? { $(CommandExpr) S? NL? #backquoteSubstitution } S? '`'
+                              / '$(' S? { $(CommandExpr) S? NL? #substitution } S? ')'
+SubExpr                       = '$' { $(SubExprSuffix) #subExpr }
+                              / '${' { $(VarName) '[' addINDEX ']' #arraySubExpr } '}'
+                              / '${' { $(SubExprSuffix) #subExpr } '}'
+addINDEX                      = NUMBER
+                              / '@'
+                              / '*'
+SubExprSuffix                 = VarName
+                              / { '?' / '*' / '@' / '#' / NUMBER #specialChar }
+VarName                       = { '_' ( '_' / LETTER / NUMBER )+ / LETTER ( '_' / LETTER / NUMBER )* #varName }
+LETTER                        = [a-zA-Z]+
+Identifier                    = { '$' / ( ESCAPED_CHAR / !FORBIDDEN_CHAR . )+ #identifier }
+IdentifierEQ                  = { '$' / ( ESCAPED_CHAR / !FORBIDDEN_CHAR_WITHOUT_EQUAL . )+ #identifier }
+FORBIDDEN_CHAR                = '\t'
+                              / ' '
+                              / '\n'
+                              / '\r'
+                              / '{'
+                              / '}'
+                              / '('
+                              / ')'
+                              / ';'
+                              / '!'
+                              / '`'
+                              / '\''
+                              / '"'
+                              / '&'
+                              / '|'
+                              / '#'
+                              / '$'
+                              / '<'
+                              / '>'
+                              / '='
+FORBIDDEN_CHAR_WITHOUT_EQUAL  = '\t'
+                              / ' '
+                              / '\n'
+                              / '\r'
+                              / '{'
+                              / '}'
+                              / '('
+                              / ')'
+                              / ';'
+                              / '!'
+                              / '`'
+                              / '\''
+                              / '"'
+                              / '&'
+                              / '|'
+                              / '#'
+                              / '$'
+                              / '<'
+                              / '>'
+ESCAPED_CHAR                  = '\\' (FORBIDDEN_CHAR / .)
+Expression                    = { ( $(AssignmentExpression) _ )+ $(Command)? #CommandWithAssign }
+                              / !KEYWORD (TestCommand / ExprCommand / EqualityExpression)
+TestCommand                   = { 'test' S+ $(EqualityExpression) #Test }
+ExprCommand                   = { 'expr' S+ $(EqualityExpression) #Test }
+AssignmentExpression          = { $(LeftValueExpression) '=' ($(CommandArg) / $(Literal)) #Assign }
+LeftValueExpression           = { $(Name) '[' addINDEX ']' #Variable }
+                              / Name
+                              / CInteger
+EqualityExpression            = RelationalExpression {$ _ ("-eq" #Equals / "-ne" #NotEquals) _ $(RelationalExpression) }*
+RelationalExpression          = AdditiveExpression {$ _ ("-le" #LessThanEquals / "-ge" #GreaterThanEquals / "-lt" #LessThan / "-gt" #GreaterThan) _ $(AdditiveExpression) }*
+AdditiveExpression            = MultiplicativeExpression {$ _ ("+" #Add / "-" !( "le" / "ge" / "lt" / "gt" / "eq" / "ne" ) #Sub) _ $(MultiplicativeExpression) }*
+MultiplicativeExpression      = PrimaryExpression {$ _ ("*" #Mul / "/" #Div / "%" #Mod) _ $(PrimaryExpression) }*
+PrimaryExpression             = { '$(' _ ($(Expression) / $(Command)) _ ')' #SubCommand }
+                              / { '${' $(Name) '}' #Variable }
+                              / { '$' $(Name) #Variable }
+                              / { '((' $(Expression) '))' #Variable }
+                              / { '[' S+ $(Expression) S+ ']' #Variable }
+                              / { '#' $(Name) '[' addINDEX ']' #Variable }
+                              / Literal
+                              / PathExpression
+Literal                       = CFloat
+                              / CInteger
+                              / Name
+                              / CString
+                              / ArrayLiteral
+ArrayLiteral                  = { '(' _ ( $(Param) ( S+ $(Param) )* )? _ ')' #Array }
+Param                         = Literal
+CString                       = '"' { STRING_CONTENT* #String } '"'
+                              / "'" { STRING_CONTENT* #String } "'"
+STRING_CONTENT                = ESCAPE
+                              / ![\"\n\\] .
+ESCAPE                        = SIMPLE_ESCAPE
+                              / OCTAL_ESCAPE
+                              / HEX_ESCAPE
+                              / UCHAR
+UCHAR                         = '\\u' HEX4
+                              / '\\U' HEX4 HEX4
+HEX4                          = HEX HEX HEX HEX
+SIMPLE_ESCAPE                 = '\\' ['\"?\\abfnrtv]
+OCTAL_ESCAPE                  = '\\' [0-7] [0-7]? [0-7]?
+HEX_ESCAPE                    = '\\x' HEX+
+KEYWORD                       = 'for'
+                              / 'while'
+                              / 'do'
+                              / 'done'
+                              / 'if'
+                              / 'elif'
+                              / 'else'
+                              / 'fi'
+                              / 'case'
+DIGIT                         = [0-9]
+CInteger                      = { (DECIMAL / HEXICAL / OCTAL) #Integer } INT_SUFFIX?
+CFloat                        = { (DECIMAL_FLOAT / HEX_FLOAT) #Float } FLOAT_SUFFIX?
+DECIMAL                       = [1-9] DIGIT*
+HEXICAL                       = HEX_PREFIX HEX+
+OCTAL                         = '0' [0-7]*
+INT_SUFFIX                    = [uU] LONG_SUFFIX?
+                              / LONG_SUFFIX [uU]?
+LONG_SUFFIX                   = 'll'
+                              / 'LL'
+                              / [lL]
+DECIMAL_FLOAT                 = FRACTION EXPONENT?
+                              / DIGIT+ EXPONENT
+HEX_FRACTION                  = HEX* '.' HEX+
+                              / HEX+ '.'
+FRACTION                      = DIGIT* '.' DIGIT+
+                              / DIGIT+ '.'
+BINARY_EXPONENT               = [pP] [+\-]? DIGIT+
+FLOAT_SUFFIX                  = [flFL]
+EXPONENT                      = [eE] [+\-]? DIGIT+
+HEX_FLOAT                     = HEX_PREFIX HEX_FRACTION BINARY_EXPONENT?
+                              / HEX_PREFIX HEX+ BINARY_EXPONENT
+HEX_PREFIX                    = '0' [xX]
+HereDoc                       = { #HereDoc $(HereDocStart) _ $(HereDocDelim) _ $(Redirect?) BREAK $(HereDocBody) _ }
+HereDocStart                  = { #IgnoreTab ("<<-" `true` / "<<" `false`) }
+HereDocBody                   = { #Body ( !( BREAK DELIM_KEYWORD ) . )+ } BREAK DELIM_KEYWORD
+HereDocDelim                  = { ("\"" DELIM_KEYWORD "\"" / "\'" DELIM_KEYWORD "\'") #IgnoreArgs `true` }
+                              / { DELIM_KEYWORD #IgnoreArgs `false` }
+DELIM_KEYWORD                 = "EOF"
+FilePath                      = { ( FILENAME / '/' )+ #FilePath }
+PathExpression                = { ( $(SubExpr) / $(FilePath) / $(Literal) )+ #PathExpression }
+
+// formatted by $ nez format
