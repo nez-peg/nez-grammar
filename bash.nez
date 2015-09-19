@@ -1,8 +1,6 @@
-// PEG4d Bash file
-// Naming rule:
-// 1. The rule that creating a object is named in UpperCamelCase
-// 2. The rule that contains # or @ expression is named in lowerCamelCase
-// 3. Otherwise, it named in UPPER_CASE
+// Bash 2.x
+// 
+
 File                          = Block
 Chunk                         = Block
 S                             = [ \t]
