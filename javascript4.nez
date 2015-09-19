@@ -1,5 +1,5 @@
 /**
- * JavaScript Grammar
+ * JavaScript 4.0 
  *
  *  Based on grammar from ECMA-262[1] and javascript.pegjs[2]
  *
@@ -10,7 +10,7 @@
  *   Tetsuro Matsumura (https://github.com/tetsurom/)
  *   Sudo Takeru (https://github.com/takerusu)
  *   Kensuke Tamura (https://github.com/kensuketamura)
- *   Kimio Kuramitsu (
+ *   Kimio Kuramitsu (https://github.com/kkuramitsu)
  */
 
 /* Start Point */
