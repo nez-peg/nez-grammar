@@ -1,0 +1,115 @@
+/**
+ * JSON Grammar
+ * ECMA-404 The JSON Data Interchange Standard.
+ *
+ * Reference: 
+ *  http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf
+ *  http://rfc7159.net/rfc7159
+ *
+ * Authors:
+ *  K. Kuramitsu 
+ */
+
+/* Starting Point  */
+File        = S* Value S* !.
+
+/* Code Layout, Tokens */
+S           = [ \t\n\r]
+"["         = '[' S*
+"]"         = ']' S*
+"{"         = '{' S*
+"}"         = '}' S*
+","         = ',' S*
+":"         = ':' S*
+
+/* Expression */
+Expression  = Value
+Value       = String
+            / Number
+            / Object
+            / Array
+            / Null
+            / True
+            / False
+            / ObjectId
+Object      = { "{" ( $(Member) ( "," $(Member) )* )? "}" #JSON }
+Member      = { $key(String) ":" $value(Value) #$$ }
+Key         = String
+ObjectId    = 'ObjectId' '("' { ID #ObjectId } '")'
+ID          = [0-9a-z]+
+Array       = { "[" ( $(Value) ( "," $(Value) )* )? "]" #List }
+String      = '"' { ( '\\"' / '\\\\' / !'"' . )* #String } '"' S*
+True        = { 'true' #True } S*
+False       = { 'false' #False } S*
+Null        = { 'null' #Null } S*
+Number      = { '-'? INT (FRAC EXP? #Float / '' #Integer) } S*
+INT         = '0'
+            / [1-9] DIGIT*
+DIGIT       = [0-9]
+FRAC        = '.' DIGIT+
+EXP         = [Ee] ( '-' / '+' )? DIGIT+
+
+/* Example tested by nez test */
+example Object&Value ~4492d3 '''
+{
+     "Image": {
+         "Width":  800,
+         "Height": 600,
+         "Title":  "View from 15th Floor",
+         "Thumbnail": {
+             "Url":    "http://www.example.com/image/481989943",
+             "Height": 125,
+             "Width":  100
+         },
+         "Animated" : false,
+         "IDs": [116, 943, 234, 38793]
+       }
+   }
+'''
+example Array&Value ~a54e06 '''
+[
+     {
+        "precision": "zip",
+        "Latitude":  37.7668,
+        "Longitude": -122.3959,
+        "Address":   "",
+        "City":      "SAN FRANCISCO",
+        "State":     "CA",
+        "Zip":       "94107",
+        "Country":   "US"
+     },
+     {
+        "precision": "zip",
+        "Latitude":  37.371991,
+        "Longitude": -122.026020,
+        "Address":   "",
+        "City":      "SUNNYVALE",
+        "State":     "CA",
+        "Zip":       "94085",
+        "Country":   "US"
+     }
+   ]
+'''
+example String&Value ~78593c '''
+"Hello world!" 
+'''
+example Number&Value ~55ecfb '''
+42 
+'''
+example Value ~1e4f2d '''
+true
+'''
+
+/* Format */
+format #JSON[*] `{$[0 `,` -1]}`
+format #$$[*] `$[0]:$[1]`
+format #List[*] `[$[0 `,` -1]]`
+format #String[*] `"${text}"`
+format #Integer[*] `${text}`
+format #Float[*] `${text}`
+format #True[*] `true`
+format #False[*] `false`
+format #Null[*] `null`
+format #ObjectId[*] `ObjectId("$[0]")`
+
+// formatted by $ nez format
