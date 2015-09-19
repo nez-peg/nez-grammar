@@ -1,5 +1,5 @@
 // XML Standard 1.0 
-// Nested CDATA Section
+// 
 
 File       = PROLOG? DTD? Xml
 Chunk      = Xml
