@@ -32,7 +32,7 @@ example Expression ~9877061 '''
 1+A*3
 '''
 example Expression ~1da9fbd '''
-1*2+3
+1 * 2 + 3
 '''
 
 format #Add[*] `($[0] + $[1])`
