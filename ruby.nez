@@ -1,6 +1,6 @@
 /*
- *ruby.nez
- *author : Mai MaiCuong
+ * Ruby 2.0
+ * author : Mai MaiCuong
 */
 File                                 = ( EOS? _ )* CompleteStatement
 
