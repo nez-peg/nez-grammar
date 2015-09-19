@@ -1,5 +1,5 @@
 /*
- * Ruby 2.0
+ * Ruby 2.x
  * author : Mai MaiCuong
 */
 File                                 = ( EOS? _ )* CompleteStatement
