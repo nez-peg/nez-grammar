@@ -1,0 +1,32 @@
+/**
+ * Comma Separated Value (RFC4180)
+ *
+ * Reference: 
+ *  RFC4180 http://tools.ietf.org/html/rfc4180
+ *
+ * Authors:
+ *  K. Kuramitsu 
+ */
+
+File                 = CommaSeparatedValue
+CommaSeparatedValue  = { $(Line)* #List }
+Line                 = { $(Value) ( ',' $(Value) )* (NEWLINE / !.) #List }
+Value                = '"' { ( '""' / !'"' . )* #Value } '"'
+                     / { ( ![,\r\n] . )* #Value }
+NEWLINE              = '\r\n'
+                     / '\n'
+
+example File ~c0212a6e6 '''
+Year,Make,Model,Description,Price
+1997,Ford,E350,"ac, abs, moon",3000.00
+1999,Chevy,"Venture ""Extended Edition""","",4900.00
+1999,Chevy,"Venture ""Extended Edition, Very Large""",,5000.00
+1996,Jeep,Grand Cherokee,"MUST SELL!
+air, moon roof, loaded",4799.00
+'''
+
+format #CSV[*] `$[0`${NL}`-1]${NL}`
+format #Line[*] `$[0`,`-1]`
+format #Value[*] `"${text}"`
+
+// formatted by $ nez format
