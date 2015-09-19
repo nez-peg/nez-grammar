@@ -1,0 +1,960 @@
+/*
+ * C++ 
+	参考サイト : http://www.nongnu.org/hcb/#identifier
+	メモ : iso-n2723.bnf にはC＋＋なのに何故かstringが定義されていないので注意
+	　　   define 周りは放置　難しい問題が存在するらしい
+	最終更新日 2015/06/04
+*/
+File                            = { ( __ SourceElement )* __ #Source }
+Chunk                           = { ( __ SourceElement )* __ #Source }
+SourceElement                   = Statement
+SPACE                           = [\t\v\f \u00A0\uFEFF]
+__                              = ( SPACE / LINE_TERMINATOR_SEQUENCE / COMMENT )*
+_                               = ( SPACE / MULTI_LINE_COMMENT_SINGLE_LINE )*
+LINE_TERMINATOR                 = [\n\r\u2028\u2029]
+LINE_TERMINATOR_SEQUENCE        = '\n'
+                                / '\r\n'
+                                / '\r'
+COMMENT                         = MULTI_LINE_COMMENT
+                                / SINGLE_LINE_COMMENT
+MULTI_LINE_COMMENT              = '/*' ( !'*/' . )* '*/'
+MULTI_LINE_COMMENT_SINGLE_LINE  = '/*' ( !( '*/' / LINE_TERMINATOR ) . )* '*/'
+SINGLE_LINE_COMMENT             = '//' ( !LINE_TERMINATOR . )*
+EOS                             = __ ';'
+                                / _ SINGLE_LINE_COMMENT? LINE_TERMINATOR_SEQUENCE
+                                / _ &'}'
+                                / __ EOF
+EOF                             = !.
+
+// ---------- Translation Part ----------
+// lex.charset--
+HEX_QUAD                        = HEXADECIMALDIGIT HEXADECIMALDIGIT HEXADECIMALDIGIT
+UNIVERSAL_CHARACTER_NAME        = '\\u' HEX_QUAD
+                                / '\\U' HEX_QUAD HEX_QUAD
+
+// lex.pptoken--
+PreprocessingToken              = HeaderName
+                                / IDENTIFIER
+                                / PpNumber
+                                / CHARACTER_LITERAL
+                                / USER_DEFINED_CHARACTER_LITERAL
+                                / StringLiteral
+                                / UserDefinedStringLiteral
+                                / PREPROCESSING_OP_OR_PUNC
+                                / { !' ' . #AnyDigit }
+
+// lex.token--
+TOKEN                           = IDENTIFIER
+                                / KEYWORD
+                                / Literal
+
+// lex.header--
+HeaderName                      = '<' { HCHAR_SEQUENCE #HeaderName } '>'
+                                / '"' { QCHAR_SEQUENCE #HeaderName } '"'
+HCHAR_SEQUENCE                  = HCHAR+
+HCHAR                           = !( NEW_LINE / '>' ) .
+QCHAR_SEQUENCE                  = QCHAR+
+QCHAR                           = !( NEW_LINE / '"' ) .
+
+// lex.ppnumber--
+PpNumber                        = { (DIGIT / '.' DIGIT) ( DIGIT / IDENTIFIER_NONDIGIT / ('e' / 'E') SIGN / '.' )* #PpNumber }
+
+// lex.name--
+IDENTIFIER                      = IDENTIFIER_NONDIGIT ( DIGIT / IDENTIFIER_NONDIGIT )*
+IDENTIFIER_NONDIGIT             = NONDIGIT
+                                / UNIVERSAL_CHARACTER_NAME
+ 	// other implementation-defined characters     C++0x
+NONDIGIT                        = [a-zA-Z_]
+DIGIT                           = [0-9]
+
+// lex.key--
+KEYWORD                         = 'alignas'
+                                / 'alignof'
+                                / 'asm'
+                                / 'auto'
+                                / 'bool'
+                                / 'break'
+                                / 'case'
+                                / 'catch'
+                                / 'char'
+                                / 'char16_t'
+                                / 'char32_t'
+                                / 'class'
+                                / 'const'
+                                / 'constexpr'
+                                / 'const_cast'
+                                / 'continue'
+                                / 'decltype'
+                                / 'default'
+                                / 'delete'
+                                / 'do'
+                                / 'double'
+                                / 'dynamic_cast'
+                                / 'else'
+                                / 'enum'
+                                / 'explicit'
+                                / 'export'
+                                / 'extern'
+                                / 'false'
+                                / 'float'
+                                / 'for'
+                                / 'friend'
+                                / 'goto'
+                                / 'if'
+                                / 'inline'
+                                / 'int'
+                                / 'long'
+                                / 'mutable'
+                                / 'namespace'
+                                / 'new'
+                                / 'noexcept'
+                                / 'nullptr'
+                                / 'operator'
+                                / 'private'
+                                / 'protected'
+                                / 'public'
+                                / 'register'
+                                / 'reinterpret_cast'
+                                / 'return'
+                                / 'short'
+                                / 'signed'
+                                / 'sizeof'
+                                / 'static'
+                                / 'static_assert'
+                                / 'static_cast'
+                                / 'struct'
+                                / 'switch'
+                                / 'template'
+                                / 'this'
+                                / 'thread_local'
+                                / 'throw'
+                                / 'true'
+                                / 'try'
+                                / 'typedef'
+                                / 'typeid'
+                                / 'typename'
+                                / 'union'
+                                / 'unsigned'
+                                / 'using'
+                                / 'virtual'
+                                / 'void'
+                                / 'volatile'
+                                / 'wchar_t'
+                                / 'while'
+
+// lex.operators--
+//OperatorToken
+ 	//Look at preprocessing-op-or-punc below See C++ Standard Core Language Issue n. 189
+
+//Punctuator
+ 	//Look at preprocessing-op-or-punc below See C++ Standard Core Language Issue n. 189
+PREPROCESSING_OP_OR_PUNC        = '{'
+                                / '}'
+                                / '['
+                                / ']'
+                                / '#'
+                                / '##'
+                                / '('
+                                / ')'
+                                / '<:'
+                                / ':>'
+                                / '<%'
+                                / '%>'
+                                / '%:'
+                                / '%:%:'
+                                / ';'
+                                / ':'
+                                / '...'
+                                / 'new'
+                                / 'delete'
+                                / '?'
+                                / '::'
+                                / '.'
+                                / '.*'
+                                / '+'
+                                / '-'
+                                / '*'
+                                / '/'
+                                / '%'
+                                / '^'
+                                / '&'
+                                / '|'
+                                / '~'
+                                / '!'
+                                / '='
+                                / '<'
+                                / '>'
+                                / '+='
+                                / '-='
+                                / '*='
+                                / '/='
+                                / '%='
+                                / '^='
+                                / '&='
+                                / '|='
+                                / '<<'
+                                / '>>'
+                                / '<<='
+                                / '>>='
+                                / '=='
+                                / '!='
+                                / '<='
+                                / '>='
+                                / '&&'
+                                / '||'
+                                / '++'
+                                / '--'
+                                / ','
+                                / '->*'
+                                / '->'
+                                / 'and'
+                                / 'and_eq'
+                                / 'bitand'
+                                / 'bitor'
+                                / 'compl'
+                                / 'not'
+                                / 'not_eq'
+                                / 'or'
+                                / 'or_eq'
+                                / 'xor'
+                                / 'xor_eq'
+
+// lex.literal.kinds--
+// StringLiteral は内部で #String と #RawString に分けられる
+// Literal の順番に注意！！
+// INTEGER_LITERAL の前に FLOATING_LITERAL を持ってくると貪欲に選択され全て INTEGER_LITERAL になる
+// 例 1.2 は 1 が INTEGER_LITERAL となり、 .2 は消費されない
+// UserDefinedLiteral についても同様
+Literal                         = { FLOATING_LITERAL #Float }
+                                / { INTEGER_LITERAL #Int }
+                                / StringLiteral
+                                / { CHARACTER_LITERAL #Char }
+                                / { BOOLEAN_LITERAL #Bool }
+                                / { POINTER_LITERAL #PointerLiteral }
+                                / UserDefinedLiteral
+
+// lex.icon--
+INTEGER_LITERAL                 = DECIMAL_LITERAL INTEGER_SUFFIX?
+                                / OCTAL_LITERAL INTEGER_SUFFIX?
+                                / HEXADECIMAL_LITERAL INTEGER_SUFFIX?
+DECIMAL_LITERAL                 = NONZERODIGIT DIGIT*
+OCTAL_LITERAL                   = '0' OCTALDIGIT*
+HEXADECIMAL_LITERAL             = ('0x' / '0X') HEXADECIMALDIGIT+
+NONZERODIGIT                    = [1-9]
+OCTALDIGIT                      = [0-7]
+HEXADECIMALDIGIT                = [0-9a-fA-F]
+INTEGER_SUFFIX                  = UNSIGNEDSUFFIX ( LONGSUFFIX / LONGLONGSUFFIX )?
+                                / (LONGSUFFIX / LONGLONGSUFFIX) UNSIGNEDSUFFIX?
+UNSIGNEDSUFFIX                  = 'u'
+                                / 'U'
+LONGSUFFIX                      = 'l'
+                                / 'L'
+LONGLONGSUFFIX                  = 'll'
+                                / 'LL'
+
+// lex.ccon--
+CHARACTER_LITERAL               = '\'' CCHAR_SEQUENCE '\''
+                                / 'u' '\'' CCHAR_SEQUENCE '\''
+                                / 'U' '\'' CCHAR_SEQUENCE '\''
+                                / 'L' '\'' CCHAR_SEQUENCE '\''
+CCHAR_SEQUENCE                  = CCHAR+
+CCHAR                           = !( '\'' / '\\' / NEW_LINE ) .
+                                / ESCAPE_SEQUENCE
+                                / UNIVERSAL_CHARACTER_NAME
+ESCAPE_SEQUENCE                 = SIMPLE_ESCAPE_SEQUENCE
+                                / OCTAL_ESCAPE_SEQUENCE
+                                / HEXADECIMAL_ESCAPE_SEQUENCE
+SIMPLE_ESCAPE_SEQUENCE          = '\\\''
+                                / '\\"'
+                                / '\\?'
+                                / '\\\\'
+                                / '\\a'
+                                / '\\b'
+                                / '\\f'
+                                / '\\n'
+                                / '\\r'
+                                / '\\t'
+                                / '\\v'
+OCTAL_ESCAPE_SEQUENCE           = '\\' OCTALDIGIT OCTALDIGIT OCTALDIGIT
+                                / '\\' OCTALDIGIT OCTALDIGIT
+                                / '\\' OCTALDIGIT
+HEXADECIMAL_ESCAPE_SEQUENCE     = '\\x' HEXADECIMALDIGIT+
+
+// lex.fcon--
+FLOATING_LITERAL                = FRACTIONAL_CONSTANT EXPONENT_PART? FLOATING_SUFFIX?
+                                / DIGIT_SEQUENCE EXPONENT_PART FLOATING_SUFFIX?
+FRACTIONAL_CONSTANT             = DIGIT_SEQUENCE? '.' DIGIT_SEQUENCE
+                                / DIGIT_SEQUENCE '.'
+EXPONENT_PART                   = 'e' SIGN? DIGIT_SEQUENCE
+                                / 'E' SIGN? DIGIT_SEQUENCE
+SIGN                            = '+'
+                                / '-'
+DIGIT_SEQUENCE                  = DIGIT+
+FLOATING_SUFFIX                 = 'f'
+                                / 'l'
+                                / 'F'
+                                / 'L'
+
+// lex.string--
+StringLiteral                   = ENCODING_PREFIX? ('"' { S_CHAR_SEQUENCE? #String } '"' / 'R' RawString)
+ENCODING_PREFIX                 = 'u8'
+                                / 'u'
+                                / 'U'
+                                / 'L'
+S_CHAR_SEQUENCE                 = SCHAR+
+SCHAR                           = !( '"' / '\\' / NEW_LINE ) .
+                                / ESCAPE_SEQUENCE
+                                / UNIVERSAL_CHARACTER_NAME
+RawString                       = { '"' DCHAR_SEQUENCE? '(' RCHAR_SEQUENCE? ')' DCHAR_SEQUENCE? '"' #RawString }
+RCHAR_SEQUENCE                  = RCHAR+
+RCHAR                           = !')' .
+ 	//= ( !('"' DCHAR_SEQUENCE? ')') . )
+DCHAR_SEQUENCE                  = DCHAR+
+DCHAR                           = !( '"' / SPACE / '(' / ')' / '\\' / NEW_LINE ) .
+ 	//= (!( SPACE / '(' / ')' / '\\' / NEW_LINE ) .)
+
+// lex.bool--
+BOOLEAN_LITERAL                 = 'false'
+                                / 'true'
+
+// lex.nullptr--
+POINTER_LITERAL                 = 'nullptr'
+
+// lex.ext--
+UserDefinedLiteral              = { USER_DEFINED_FLOATING_LITERAL #UserDefinedFloatingLiteral }
+                                / { USER_DEFINED_INTEGER_LITERAL #UserDefinedIntegerLiteral }
+                                / { USER_DEFINED_CHARACTER_LITERAL #UserDefinedCharacterLiteral }
+                                / { $(UserDefinedStringLiteral) #UserDefinedStringLiteral }
+USER_DEFINED_INTEGER_LITERAL    = DECIMAL_LITERAL UD_SUFFIX
+                                / OCTAL_LITERAL UD_SUFFIX
+                                / HEXADECIMAL_LITERAL UD_SUFFIX
+USER_DEFINED_FLOATING_LITERAL   = FRACTIONAL_CONSTANT EXPONENT_PART? UD_SUFFIX
+                                / DIGIT_SEQUENCE EXPONENT_PART UD_SUFFIX
+UserDefinedStringLiteral        = { $(StringLiteral) UD_SUFFIX }
+USER_DEFINED_CHARACTER_LITERAL  = CHARACTER_LITERAL UD_SUFFIX
+UD_SUFFIX                       = IDENTIFIER
+
+// basic.link--
+TranslationUnit                 = { DeclarationSeq? #TranslationUnit }
+
+// expr.prim.general--
+PrimaryExpression               = Literal
+                                / 'this'
+                                / _ '(' _ Expression _ ')' _
+                                / IdExpression
+                                / LambdaExpression
+IdExpression                    = UnqualifiedId
+                                / QualifiedId
+UnqualifiedId                   = IDENTIFIER
+                                / OperatorFunctionId
+                                / ConversionFunctionId
+                                / LiteralOperatorId
+                                / '~' ClassName
+                                / '~' DecltypeSpecifier
+                                / TemplateId
+QualifiedId                     = '::'? NestedNameSpecifier _ 'template'? _ UnqualifiedId
+                                / '::' IDENTIFIER
+                                / '::' OperatorFunctionId
+                                / '::' LiteralOperatorId
+                                / '::' TemplateId
+NestedNameSpecifier             = (TypeName / NamespaceName / DecltypeSpecifier) '::' (IDENTIFIER / 'template'? SimpleTemplateId) '::'
+
+// expr.prim.lambda--
+LambdaExpression                = LambdaIntroducer LambdaDeclarator? CompoundStatement
+LambdaIntroducer                = '[' _ LambdaCapture? _ ']'
+LambdaCapture                   = CAPTURE_DEFAULT
+                                / CaptureList
+                                / CAPTURE_DEFAULT _ ',' _ CaptureList
+CAPTURE_DEFAULT                 = '&'
+                                / '='
+CaptureList                     = Capture '...'? ( ',' Capture '...'? )*
+Capture                         = IDENTIFIER
+                                / '&' IDENTIFIER
+                                / 'this'
+LambdaDeclarator                = '(' _ ParameterDeclarationClause _ ')' _ 'mutable'? _ ExceptionSpecification? _ AttributeSpecifierSeq? _ TrailingReturnType?
+
+// expr.post--
+PostfixExpression               = (PrimaryExpression / SimpleTypeSpecifier __ '(' __ ExpressionList? __ ')' __ / TypenameSpecifier __ '(' __ ExpressionList? __ ')' __ / SimpleTypeSpecifier __ BracedInitList / TypenameSpecifier __ BracedInitList / { 'dynamic_cast' '<' __ TypeId __ '>' '(' __ $(Expression) __ ')' #DynamicCast } / { 'static_cast' '<' __ TypeId __ '>' '(' __ $(Expression) __ ')' #StaticCast } / { 'reinterpret_cast' '<' __ TypeId __ '>' '(' __ $(Expression) __ ')' #ReinterpretCast } / { 'const_cast' '<' __ TypeId __ '>' '(' __ $(Expression) __ ')' #ConstCast } / { 'typeid' '(' __ $(Expression) __ ')' #Typeid } / { 'typeid' '(' __ TypeId __ ')' #Typeid }) ( '[' _ $(Expression) _ ']' / '[' _ $(BracedInitList)? _ ']' / '(' _ ExpressionList? _ ')' / '.' 'template'? IdExpression / '->' 'template'? IdExpression / '.' PseudoDestructorName / '->' PseudoDestructorName / addPostfixOperator )*
+addPostfixOperator              = '++' #SuffixInc
+                                / '--' #SuffixDec
+ExpressionList                  = InitializerList
+PseudoDestructorName            = '::'? NestedNameSpecifier? TypeName '::' '~' TypeName
+                                / '::'? NestedNameSpecifier 'template' SimpleTemplateId '::' '~' TypeName
+                                / '::'? NestedNameSpecifier? '~' TypeName
+                                / '~' DecltypeSpecifier
+
+// expr.unary--
+UnaryExpression                 = PostfixExpression
+                                / { addUnaryOperator __ $(CastExpression) }
+                                / { 'sizeof' #Sizeof __ $(UnaryExpression) }
+                                / { 'sizeof' #Sizeof __ '(' __ TypeId __ ')' }
+                                / { 'sizeof' #Sizeof __ '...' __ '(' __ IDENTIFIER __ ')' }
+                                / { 'alignof' #Alignof __ '(' __ TypeId __ ')' }
+                                / NoexceptExpression
+                                / NewExpression
+                                / DeleteExpression
+addUnaryOperator                = '++' #PrefixInc
+                                / '--' #PrefixDec
+                                / '*' #Pointer
+                                / '&' #Address
+                                / '+' #Plus
+                                / '-' #Minus
+                                / '!' #LogicalNot
+                                / '~' #BitwiseNot
+
+// expr.new--
+NewExpression                   = '::'? 'new' NewPlacement? NewTypeId NewInitializer?
+                                / '::'? 'new' NewPlacement? '(' TypeId ')' NewInitializer?
+NewPlacement                    = '(' _ ExpressionList _ ')'
+NewTypeId                       = TypeSpecifierSeq NewDeclarator?
+NewDeclarator                   = PtrOperator+ NoptrNewDeclarator?
+NoptrNewDeclarator              = '[' _ Expression _ ']' AttributeSpecifierSeq? ( '[' $(ConstantExpression) ']' AttributeSpecifierSeq? )*
+NewInitializer                  = '(' _ ExpressionList? _ ')'
+                                / BracedInitList
+
+// expr.delete--
+DeleteExpression                = '::'? 'delete' CastExpression
+                                / '::'? 'delete' '[' ']' CastExpression
+
+// expr.unary.noexcept--
+NoexceptExpression              = 'noexcept' '(' Expression ')'
+
+// expr.cast--
+CastExpression                  = ( '(' TypeId ')' )* UnaryExpression
+
+// expr.mptr.oper--
+PmExpression                    = CastExpression {$ ('.*' #PmExpression1 / '->*' #PmExpression2) $(CastExpression) }*
+
+// expr.mul--
+// MultiplicativeExpression が動かないのはここの書きかたが悪いのではなくその他の場所のエラーが原因のようだ 2015/06/04
+// MultiplicativeExpression = Digit {@ __ ('*' #Mul /'/' #Div /'%' #Mod) __ @Digit }* 
+// Digit = { [0-9] #Digit }
+// として >> MultiplicativeExpression 1*1 を行った結果、正しい結果は得られなかった (現在のままのものと同じ結果が得られた)
+MultiplicativeExpression        = PmExpression {$ __ ('*' #Mul / '/' #Div / '%' #Mod) __ $(PmExpression) }*
+
+// expr.add--
+AdditiveExpression              = MultiplicativeExpression {$ __ ('+' #Add / '-' #Sub) __ $(MultiplicativeExpression) }*
+
+// expr.shift--
+ShiftExpression                 = AdditiveExpression {$ __ addShiftOperator __ $(AdditiveExpression) }*
+addShiftOperator                = '<<' #LeftShift
+                                / '>>' !'=' #RightShift
+
+// expr.rel--
+RelationalExpression            = ShiftExpression {$ __ addRelationalOperator __ $(ShiftExpression) }*
+addRelationalOperator           = '<' ('=' #LessThanOrEqualTo / #LessThan)
+                                / '>' ('=' #GreaterThanOrEqualTo / #GreaterThan)
+
+// expr.eq--
+EqualityExpression              = RelationalExpression {$ __ addEqualityOperator __ $(RelationalExpression) }*
+addEqualityOperator             = '==' ('=' #StringEquals / #Equals)
+                                / '!=' ('=' #StringNotEquals / #NotEquals)
+
+// expr.bit.and--
+AndExpression                   = EqualityExpression {$ __ '&' __ $(EqualityExpression) #BitwiseAnd }*
+
+// expr.xor--
+ExclusiveOrExpression           = AndExpression {$ __ '^' __ $(AndExpression) #BitwiseXor }*
+
+// expr.or--
+InclusiveOrExpression           = ExclusiveOrExpression {$ __ '|' __ $(ExclusiveOrExpression) #BitwiseOr }*
+
+// expr.log.and--
+LogicalAndExpression            = InclusiveOrExpression {$ __ '&&' __ $(InclusiveOrExpression) #LogicalAnd }*
+
+// expr.log.or--
+LogicalOrExpression             = LogicalAndExpression {$ __ '||' __ $(LogicalAndExpression) #LogicalOr }*
+
+// expr.cond--
+ConditionalExpression           = LogicalOrExpression {$ __ '?' __ $(Expression) __ ':' __ $(AssignmentExpression) #Conditional }
+                                / LogicalOrExpression
+
+// expr.ass--
+AssignmentExpression            = { $(LogicalOrExpression) __ addAssignmentOperator __ $(InitializerClause) }
+                                / ConditionalExpression
+                                / ThrowExpression
+addAssignmentOperator           = '=' #Assign
+                                / '*=' #AssignMul
+                                / '/=' #AssignDiv
+                                / '%=' #AssignMod
+                                / '+=' #AssignAdd
+                                / '-=' #AssignSub
+                                / '>>=' #AssignLeftShift
+                                / '<<=' #AssignRightShift
+                                / '&=' #AssignBitwiseAnd
+                                / '^=' #AssignBitwiseXOr
+                                / '|=' #AssignBitwiseOr
+
+// expr.comma--
+Expression                      = AssignmentExpression {$ __ ',' __ $(AssignmentExpression) #Comma }*
+
+// expr.const--
+ConstantExpression              = ConditionalExpression
+
+// stmt.stmt--
+Statement                       = LabeledStatement
+                                / DeclarationStatement
+                                / AttributeSpecifierSeq? (ExpressionStatement / CompoundStatement / SelectionStatement / IterationStatement / JumpStatement / TryBlock)
+
+// stmt.label--
+LabeledStatement                = AttributeSpecifierSeq? (IDENTIFIER / 'case' ConstantExpression / 'default') ':' Statement
+
+// stmt.expr--
+ExpressionStatement             = Expression? ';'
+
+// stmt.block--
+CompoundStatement               = '{' StatementSeq? '}'
+StatementSeq                    = Statement+
+
+// stmt.select--
+SelectionStatement              = 'if' '(' Condition ')' Statement 'else' Statement
+                                / 'if' '(' Condition ')' Statement
+                                / 'switch' '(' Condition ')' Statement
+Condition                       = Expression
+                                / AttributeSpecifierSeq? DeclSpecifierSeq Declarator ('=' $(InitializerClause) / $(BracedInitList))
+
+// stmt.iter--
+IterationStatement              = { 'while' '(' $(Condition) ')' Statement #While }
+                                / { 'do' Statement 'while' '(' $(Expression) ')' ';' #Do }
+                                / { 'for' '(' ForInitStatement $(Condition)? ';' $(Expression)? ')' Statement #For }
+                                / { 'for' '(' $(ForRangeDeclaration) ':' $(ForRangeInitializer) ')' Statement #For }
+ForInitStatement                = ExpressionStatement
+                                / SimpleDeclaration
+ForRangeDeclaration             = AttributeSpecifierSeq? TypeSpecifierSeq Declarator
+ForRangeInitializer             = Expression $(BracedInitList)
+
+// stmt.jump--
+JumpStatement                   = { 'break' ';' #Break }
+                                / { 'continue' ';' #Continue }
+                                / { 'return' $(Expression)? ';' #Return }
+                                / { 'return' $(BracedInitList)? ';' #Return }
+                                / { 'goto' IDENTIFIER ';' #Goto }
+
+// stmt.dcl--
+DeclarationStatement            = BlockDeclaration
+
+// dcl.dcl--
+DeclarationSeq                  = Declaration+
+Declaration                     = BlockDeclaration
+                                / FunctionDefinition
+                                / TemplateDeclaration
+                                / ExplicitInstantiation
+                                / ExplicitSpecialization
+                                / LinkageSpecification
+                                / NamespaceDefinition
+                                / EmptyDeclaration
+                                / AttributeDeclaration
+BlockDeclaration                = SimpleDeclaration
+                                / AsmDefinition
+                                / NamespaceAliasDefinition
+                                / UsingDeclaration
+                                / UsingDirective
+                                / Static_assertDeclaration
+                                / AliasDeclaration
+                                / OpaqueEnumDeclaration
+AliasDeclaration                = { _ 'using' _ IDENTIFIER _ '=' _ TypeId _ ';' _ #AliasDeclaration }
+SimpleDeclaration               = { AttributeSpecifierSeq? DeclSpecifierSeq? $(InitDeclaratorList)? ';' #SimpleDeclaration }
+Static_assertDeclaration        = { 'static_assert' '(' $(ConstantExpression) ',' $(StringLiteral) ')' ';' #Static_assert }
+EmptyDeclaration                = { ';' #EmptyDeclaration }
+AttributeDeclaration            = AttributeSpecifierSeq ';'
+
+// dcl.spec--
+DeclSpecifier                   = STORAGE_CLASS_SPECIFIER
+                                / TypeSpecifier
+                                / FUNCTION_SPECIFIER
+                                / 'friend'
+                                / 'typedef'
+                                / 'constexpr'
+DeclSpecifierSeq                = DeclSpecifier+ AttributeSpecifierSeq?
+
+// dcl.stc--
+STORAGE_CLASS_SPECIFIER         = 'auto'
+                                / 'register'
+                                / 'static'
+                                / 'thread_local'
+                                / 'extern'
+                                / 'mutable'
+
+// dcl.fct.spec--
+FUNCTION_SPECIFIER              = 'inline'
+                                / 'virtual'
+                                / 'explicit'
+
+// dcl.typedef--
+TypedefName                     = { IDENTIFIER #TypedefName }
+
+// dcl.type--
+TypeSpecifier                   = TrailingTypeSpecifier
+                                / ClassSpecifier
+                                / EnumSpecifier
+TrailingTypeSpecifier           = SimpleTypeSpecifier
+                                / ElaboratedTypeSpecifier
+                                / TypenameSpecifier
+                                / CV_QUALIFIER
+TypeSpecifierSeq                = TypeSpecifier+ AttributeSpecifierSeq?
+TrailingTypeSpecifierSeq        = TrailingTypeSpecifier+ AttributeSpecifierSeq?
+
+// dct.type.simple--
+SimpleTypeSpecifier             = '::'? NestedNameSpecifier? TypeName
+                                / '::'? NestedNameSpecifier 'template' SimpleTemplateId
+                                / 'char'
+                                / 'char16_t'
+                                / 'char32_t'
+                                / 'wchar_t'
+                                / 'bool'
+                                / 'short'
+                                / 'int'
+                                / 'long'
+                                / 'signed'
+                                / 'unsigned'
+                                / 'float'
+                                / 'double'
+                                / 'void'
+                                / 'auto'
+                                / DecltypeSpecifier
+TypeName                        = ClassName
+                                / EnumName
+                                / TypedefName
+                                / SimpleTemplateId
+DecltypeSpecifier               = 'decltype' '(' Expression ')'
+
+// dcl.type.elab--
+ElaboratedTypeSpecifier         = CLASS_KEY AttributeSpecifierSeq? '::'? NestedNameSpecifier? IDENTIFIER
+                                / CLASS_KEY '::'? NestedNameSpecifier? 'template'? SimpleTemplateId
+                                / 'enum' '::' NestedNameSpecifier? IDENTIFIER
+
+// dcl.enum--
+EnumName                        = IDENTIFIER
+EnumSpecifier                   = EnumHead '{' EnumeratorList? '}'
+                                / EnumHead '{' EnumeratorList ',' '}'
+EnumHead                        = EnumKey AttributeSpecifierSeq? IDENTIFIER? EnumBase?
+                                / EnumKey AttributeSpecifierSeq? NestedNameSpecifier IDENTIFIER EnumBase?
+OpaqueEnumDeclaration           = EnumKey AttributeSpecifierSeq? IDENTIFIER EnumBase? ';'
+EnumKey                         = 'enum' 'class'
+                                / 'enum' 'struct'
+                                / 'enum'
+EnumBase                        = ':' TypeSpecifierSeq
+EnumeratorList                  = EnumeratorDefinition ( ',' EnumeratorDefinition )*
+EnumeratorDefinition            = Enumerator
+                                / Enumerator '=' ConstantExpression
+Enumerator                      = IDENTIFIER
+
+// namespace.def--
+NamespaceName                   = OriginalNamespaceName
+                                / NamespaceAlias
+OriginalNamespaceName           = IDENTIFIER
+NamespaceDefinition             = NamedNamespaceDefinition
+                                / UnnamedNamespaceDefinition
+NamedNamespaceDefinition        = OriginalNamespaceDefinition
+                                / ExtensionNamespaceDefinition
+OriginalNamespaceDefinition     = 'inline'? 'namespace' IDENTIFIER '{' NamespaceBody '}'
+ExtensionNamespaceDefinition    = 'inline'? 'namespace' OriginalNamespaceName '{' NamespaceBody '}'
+UnnamedNamespaceDefinition      = 'inline'? 'namespace' '{' NamespaceBody '}'
+NamespaceBody                   = DeclarationSeq?
+
+// namespace.alias--
+NamespaceAlias                  = IDENTIFIER
+NamespaceAliasDefinition        = 'namespace' IDENTIFIER '=' QualifiedNamespaceSpecifier ';'
+QualifiedNamespaceSpecifier     = '::'? NestedNameSpecifier? NamespaceName
+
+// namespace.udecl--
+UsingDeclaration                = 'using' 'typename'? '::'? NestedNameSpecifier UnqualifiedId ';'
+                                / 'using' '::' UnqualifiedId ';'
+
+// namespace.udir--
+UsingDirective                  = AttributeSpecifierSeq? 'using' 'namespace' '::'? NestedNameSpecifier? NamespaceName ';'
+
+// dcl.asm--
+AsmDefinition                   = 'asm' '(' StringLiteral ')' ';'
+
+// dcl.link--
+LinkageSpecification            = 'extern' StringLiteral '{' DeclarationSeq? '}'
+                                / 'extern' StringLiteral $(Declaration)
+
+// dcl.attr.grammar--
+AttributeSpecifierSeq           = AttributeSpecifier+
+AttributeSpecifier              = '[' '[' AttributeList ']' ']'
+                                / AlignmentSpecifier
+AlignmentSpecifier              = 'alignas' '(' TypeId '...'? ')'
+                                / 'alignas' '(' ConstantExpression '...'? ')'
+
+/* 
+   ( 'alignas' '(' AlignmentExpression '...'? ')' ) => ( 'alignas' '(' ConstantExpression '...'? ')' )
+   I couldn't find alignment-expression
+   used constant-expression instead ( iso-n2723.bnf )
+*/
+
+/*
+	かっこで優先順位を決定する必要がある
+	@Attribute? <- invalid な記法 
+	(@Attribute)? <- valid な記法
+*/
+AttributeList                   = (Attribute '...' / Attribute) ( ',' ($(Attribute) '...' / $(Attribute)?) )*
+Attribute                       = AttributeToken AttributeArgumentClause?
+AttributeToken                  = { IDENTIFIER #AttributeToken }
+                                / AttributeScopedToken
+AttributeScopedToken            = { $(AttributeNamespace) '::' IDENTIFIER #AttributeScopedToken }
+AttributeNamespace              = { IDENTIFIER #AttributeNamespace }
+AttributeArgumentClause         = '(' BalancedTokenSeq ')'
+BalancedTokenSeq                = BalancedToken+
+BalancedToken                   = '(' BalancedTokenSeq ')'
+                                / '[' BalancedTokenSeq ']'
+                                / '{' BalancedTokenSeq '}'
+                                / TOKEN
+
+// dcl.decl--
+InitDeclaratorList              = InitDeclarator ( ',' $(InitDeclarator) )*
+InitDeclarator                  = Declarator $(Initializer)?
+Declarator                      = PtrDeclarator
+                                / NoptrDeclarator ParametersAndQualifiers TrailingReturnType
+PtrDeclarator                   = { PtrOperator* NoptrDeclarator #PtrDeclarator }
+NoptrDeclarator                 = (DeclaratorId AttributeSpecifierSeq / '(' PtrDeclarator ')') ( ParametersAndQualifiers / '[' ConstantExpression? ']' AttributeSpecifierSeq? )*
+ParametersAndQualifiers         = '(' ParameterDeclarationClause ')' AttributeSpecifierSeq? CvQualifierSeq? REF_QUALIFIER? ExceptionSpecification?
+TrailingReturnType              = '->' TrailingTypeSpecifierSeq AbstractDeclarator?
+PtrOperator                     = '*' AttributeSpecifierSeq? CvQualifierSeq?
+                                / '&' AttributeSpecifierSeq?
+                                / '&&' AttributeSpecifierSeq?
+                                / '::'? NestedNameSpecifier '*' AttributeSpecifierSeq? CvQualifierSeq?
+CvQualifierSeq                  = CV_QUALIFIER+
+CV_QUALIFIER                    = 'const'
+                                / 'volatile'
+REF_QUALIFIER                   = '&'
+                                / '&&'
+DeclaratorId                    = '...'? IdExpression
+                                / '::'? NestedNameSpecifier? ClassName
+
+// dcl.name--
+TypeId                          = TypeSpecifierSeq AbstractDeclarator?
+AbstractDeclarator              = PtrAbstractDeclarator
+                                / NoptrAbstractDeclarator? ParametersAndQualifiers TrailingReturnType
+                                / '...'
+PtrAbstractDeclarator           = NoptrAbstractDeclarator
+                                / PtrOperator PtrAbstractDeclarator?
+NoptrAbstractDeclarator         = ( ParametersAndQualifiers / '[' ConstantExpression ']' AttributeSpecifierSeq? / '(' PtrAbstractDeclarator ')' )+
+
+// dcl.fct--
+ParameterDeclarationClause      = ParameterDeclarationList? '...'?
+                                / ParameterDeclarationList ',' '...'
+ParameterDeclarationList        = ParameterDeclaration ( ',' $(ParameterDeclaration) )*
+ParameterDeclaration            = AttributeSpecifierSeq? DeclSpecifierSeq Declarator
+                                / AttributeSpecifierSeq? DeclSpecifierSeq Declarator '=' $(InitializerClause)
+                                / AttributeSpecifierSeq? DeclSpecifierSeq AbstractDeclarator?
+                                / AttributeSpecifierSeq? DeclSpecifierSeq AbstractDeclarator? '=' InitializerClause
+
+// dcl.fct.def.general--
+FunctionDefinition              = AttributeSpecifierSeq? DeclSpecifierSeq? Declarator FunctionBody
+                                / AttributeSpecifierSeq? DeclSpecifierSeq? Declarator '=' 'default' ';'
+                                / AttributeSpecifierSeq? DeclSpecifierSeq? Declarator '=' 'delete' ';'
+FunctionBody                    = CtorInitializer? CompoundStatement
+                                / FunctionTryBlock
+
+// dcl.init--
+Initializer                     = BraceOrEqualInitializer
+                                / '(' ExpressionList ')'
+BraceOrEqualInitializer         = '=' InitializerClause
+                                / BracedInitList
+InitializerClause               = AssignmentExpression
+                                / BracedInitList
+InitializerList                 = InitializerClause '...'? {$ ',' $(InitializerClause) '...'? }*
+BracedInitList                  = '{' InitializerList ','? '}'
+                                / '{' '}'
+
+// class--
+ClassName                       = IDENTIFIER
+                                / SimpleTemplateId
+ClassSpecifier                  = ClassHead '{' MemberSpecification? '}'
+ClassHead                       = CLASS_KEY AttributeSpecifierSeq? ClassHeadName ClassVirtSpecifierSeq? BaseClause?
+                                / CLASS_KEY AttributeSpecifierSeq? BaseClause?
+ClassHeadName                   = NestedNameSpecifier? ClassName
+ClassVirtSpecifierSeq           = CLASS_VIRT_SPECIFIER+
+CLASS_VIRT_SPECIFIER            = 'final'
+                                / 'explicit'
+CLASS_KEY                       = 'class'
+                                / 'struct'
+                                / 'union'
+
+// class.mem--
+MemberSpecification             = ( MemberDeclaration / ACCESS_SPECIFIER ':' )+
+MemberDeclaration               = AttributeSpecifierSeq? DeclSpecifierSeq? MemberDeclaratorList? ';'
+                                / FunctionDefinition ';'?
+                                / UsingDeclaration
+                                / Static_assertDeclaration
+                                / TemplateDeclaration
+                                / AliasDeclaration
+MemberDeclaratorList            = MemberDeclarator ( ',' $(MemberDeclarator) )*
+MemberDeclarator                = Declarator VirtSpecifierSeq? ( PURE_SPECIFIER / $(BraceOrEqualInitializer) )?
+                                / IDENTIFIER? AttributeSpecifierSeq? VirtSpecifierSeq? ':' ConstantExpression
+VirtSpecifierSeq                = VIRT_SPECIFIER+
+VIRT_SPECIFIER                  = 'override'
+                                / 'final'
+                                / 'new'
+PURE_SPECIFIER                  = '=' '0'
+
+// class.derived--
+BaseClause                      = ':' BaseSpecifierList
+BaseSpecifierList               = BaseSpecifier '...'? ( ',' BaseSpecifier '...'? )*
+BaseSpecifier                   = AttributeSpecifierSeq? BaseTypeSpecifier
+                                / AttributeSpecifierSeq? 'virtual' ACCESS_SPECIFIER? BaseTypeSpecifier
+                                / AttributeSpecifierSeq? ACCESS_SPECIFIER 'virtual'? BaseTypeSpecifier
+ClassOrDecltype                 = '::'? NestedNameSpecifier? ClassName
+                                / DecltypeSpecifier
+BaseTypeSpecifier               = ClassOrDecltype
+ACCESS_SPECIFIER                = 'private'
+                                / 'protected'
+                                / 'public'
+
+// class.conv.fct--
+ConversionFunctionId            = 'operator' ConversionTypeId
+ConversionTypeId                = TypeSpecifierSeq ConversionDeclarator?
+ConversionDeclarator            = PtrOperator ConversionDeclarator?
+
+// class.base.init--
+CtorInitializer                 = ':' MemInitializerList
+MemInitializerList              = MemInitializer '...'?
+                                / MemInitializer ',' MemInitializerList '...'?
+MemInitializer                  = MemInitializerId '(' ExpressionList? ')'
+                                / MemInitializerId BracedInitList
+MemInitializerId                = ClassOrDecltype
+                                / IDENTIFIER
+
+// over.oper-
+OperatorFunctionId              = 'operator' OVER_LOADABLE_OPERATOR
+                                / 'operator' OVER_LOADABLE_OPERATOR '<' TemplateArgumentList? '>'
+OVER_LOADABLE_OPERATOR          = 'new'
+                                / 'delete'
+                                / 'new' '[' ']'
+                                / 'delete' '[' ']'
+                                / '+'
+                                / '-'
+                                / '*'
+                                / '/'
+                                / '%'
+                                / '^'
+                                / '&'
+                                / '|'
+                                / '~'
+                                / '!'
+                                / '='
+                                / '<'
+                                / '>'
+                                / '+='
+                                / '-='
+                                / '*='
+                                / '/='
+                                / '%='
+                                / '^='
+                                / '&='
+                                / '|='
+                                / '<<'
+                                / '>>'
+                                / '>>='
+                                / '<<='
+                                / '=='
+                                / '!='
+                                / '<='
+                                / '>='
+                                / '&&'
+                                / '||'
+                                / '++'
+                                / '--'
+                                / ','
+                                / '->*'
+                                / '->'
+                                / '()'
+                                / '[]'
+
+// over.literal--
+LiteralOperatorId               = 'operator' '""' IDENTIFIER
+
+// temp--
+TemplateDeclaration             = 'template' '<' TemplateParameterList '>' Declaration
+TemplateParameterList           = TemplateParameter ( ',' TemplateParameter )*
+
+// temp.param--
+TemplateParameter               = TypeParameter
+                                / ParameterDeclaration
+TypeParameter                   = 'class' '...'? IDENTIFIER?
+                                / 'class' IDENTIFIER? '=' TypeId
+                                / 'typename' '...'? IDENTIFIER?
+                                / 'typename' IDENTIFIER? '=' TypeId
+                                / 'template' '<' TemplateParameterList '>' 'class' '...'? IDENTIFIER?
+                                / 'template' '<' TemplateParameterList '>' 'class' IDENTIFIER? '=' IdExpression
+
+// temp.names--
+SimpleTemplateId                = TemplateName '<' TemplateArgumentList? '>'
+TemplateId                      = SimpleTemplateId
+                                / (OperatorFunctionId / LiteralOperatorId) '<' TemplateArgumentList? '>'
+TemplateName                    = IDENTIFIER
+TemplateArgumentList            = TemplateArgument '...'? {$ ',' $(TemplateArgument) '...'? }*
+TemplateArgument                = ConstantExpression
+                                / TypeId
+                                / IdExpression
+
+// temp.res--
+TypenameSpecifier               = 'typename' '::'? NestedNameSpecifier 'template'? SimpleTemplateId
+                                / 'typename' '::'? NestedNameSpecifier IDENTIFIER
+
+// temp.explicit--
+ExplicitInstantiation           = 'extern'? 'template' Declaration
+
+// temp.expl.spec--
+ExplicitSpecialization          = 'template' '<' '>' Declaration
+
+// except--
+TryBlock                        = { 'try' CompoundStatement HandlerSeq #Try }
+FunctionTryBlock                = 'try' CtorInitializer? CompoundStatement HandlerSeq
+HandlerSeq                      = Handler+
+Handler                         = 'catch' '(' ExceptionDeclaration ')' CompoundStatement
+ExceptionDeclaration            = '...'
+                                / AttributeSpecifierSeq? TypeSpecifierSeq Declarator
+                                / AttributeSpecifierSeq? TypeSpecifierSeq AbstractDeclarator?
+ThrowExpression                 = { 'throw' $(AssignmentExpression)? #Throw }
+
+// except.spec--
+ExceptionSpecification          = DynamicExceptionSpecification
+                                / NoexceptSpecification
+DynamicExceptionSpecification   = 'throw' '(' TypeIdList? ')'
+TypeIdList                      = TypeId '...'? ( ',' TypeId '...'? )*
+NoexceptSpecification           = 'noexcept'
+                                / 'noexcept' '(' ConstantExpression ')'
+
+// ---------- Preprocessing Part----------
+// cpp--
+PreprocessingFile               = Group?
+Group                           = GroupPart+
+GroupPart                       = IfSection
+                                / ControlLine
+                                / TextLine
+                                / '#' NonDirective
+IfSection                       = IfGroup ElifGroups? $(ElseGroup)? $(EndifLine)
+IfGroup                         = { '#' 'if' $(ConstantExpression) NEW_LINE Group? #SharpIf }
+                                / { '#' 'ifdef' IDENTIFIER NEW_LINE Group? #Ifdef }
+                                / { '#' 'ifndef' IDENTIFIER NEW_LINE Group? #Ifndef }
+ElifGroups                      = ElifGroup+
+ElifGroup                       = { '#' 'elif' $(ConstantExpression) NEW_LINE Group? #Elif }
+ElseGroup                       = { '#' 'else' NEW_LINE Group? #Else }
+EndifLine                       = { '#' 'endif' NEW_LINE #Endif }
+ControlLine                     = { '#' 'include' PpTokens NEW_LINE #Include }
+                                / { '#' 'define' IDENTIFIER ReplacementList NEW_LINE #Define }
+                                / { '#' 'define' IDENTIFIER Lparen IdentifierList? ')' ReplacementList NEW_LINE #Define }
+                                / { '#' 'define' IDENTIFIER Lparen IdentifierList ',' '...' ')' ReplacementList NEW_LINE #Define }
+                                / { '#' 'undef' IDENTIFIER NEW_LINE #Undef }
+                                / { '#' 'line' PpTokens NEW_LINE #Line }
+                                / { '#' 'error' PpTokens? NEW_LINE #Error }
+                                / { '#' 'pragma' PpTokens? NEW_LINE #Pragma }
+                                / { '#' NEW_LINE #Sharp }
+TextLine                        = PpTokens? NEW_LINE
+NonDirective                    = PpTokens NEW_LINE
+
+//a ( character not immediately preceded by white-space
+Lparen                          = '('
+IdentifierList                  = IDENTIFIER ( ',' IDENTIFIER )*
+ReplacementList                 = PpTokens?
+PpTokens                        = PreprocessingToken+
+NEW_LINE                        = LINE_TERMINATOR_SEQUENCE
+
+example SelectionStatement&Statement '''
+if(1)
+'''
+
+// formatted by $ nez format
