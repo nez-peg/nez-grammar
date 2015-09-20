@@ -1,0 +1,79 @@
+/*
+  MinCaml Grammar
+  Based on grammar from MinCaml compiler outlined[1]
+  [1] http://esumii.github.io/min-caml/
+  Author:
+    Shun Honda (https://github.com/shun-honda)
+*/
+
+
+File                          = { _ $(Expression) ( _ ';' _ $(Expression) )* _ EOF #Source }
+                              / { _ EOF #Source }
+_                             = ( S / COMMENT )*
+S                             = [ \t\n\r]
+COMMENT                       = '(*' ( !'*)' . )* '*)'
+EOF                           = !.
+W                             = [a-z] [a-zA-Z0-9_]*
+"+"                           = '+' !'.'
+"-"                           = '-' !'.'
+"<"                           = '<' ![=-]
+">"                           = '>' !'='
+"true"                        = 'true' !W
+"false"                       = 'false' !W
+"if"                          = 'if' !W
+"then"                        = 'then' !W
+"else"                        = 'else' !W
+"let"                         = 'let' !W
+"in"                          = 'in' !W
+"rec"                         = 'rec' !W
+"Array.create"                = 'Array.create' !W
+KEYWORD                       = "true"
+                              / "false"
+                              / "if"
+                              / "then"
+                              / "else"
+                              / "let"
+                              / "in"
+                              / "rec"
+                              / "Array.create"
+Expression                    = CompoundExpression
+                              / EqualityExpression
+CompoundExpression            = IfExpression
+                              / RecursiveFunctionDeclaration
+                              / VariableDeclaration
+                              / LetTupleExpression
+                              / ArrayCreateExpression
+IfExpression                  = { "if" _ $(Expression) _ "then" _ $(Expression) _ "else" _ $(Expression) #If }
+RecursiveFunctionDeclaration  = { "let" _ "rec" _ $(Identifier) _ $(FormalArgList) _ '=' _ $(Expression) _ "in" _ $(Expression) #FunctionDecl }
+FormalArgList                 = { $(Identifier) ( _ $(Identifier) )* #FormalArgList }
+VariableDeclaration           = { "let" _ $(Identifier) _ '=' _ $(Expression) _ "in" _ $(Expression) #VarDecl }
+LetTupleExpression            = { "let" _ '(' _ $(Pat) _ ')' _ '=' _ $(Expression) _ "in" _ $(Expression) #LetTuple }
+Pat                           = { $(Identifier) ( _ ',' _ $(Identifier) )+ #Pat }
+ArrayCreateExpression         = { "Array.create" _ $(ReadArrayElementExpression) _ $(ReadArrayElementExpression) #ArrayCreate }
+EqualityExpression            = RelationalExpression {$ _ '=' #Equals _ $(RelationalExpression) }*
+RelationalExpression          = AdditiveExpression {$ _ addRelationalOperator _ $(AdditiveExpression) }*
+AdditiveExpression            = MultiplicativeExpression {$ _ ('+.' #FAdd / "+" #Add / '-.' #FSub / "-" #Sub) _ $(MultiplicativeExpression) }*
+MultiplicativeExpression      = UnaryExpression {$ _ ('*.' #FMul / '*' #Mul / '/.' #FDiv / '/' #Div) _ $(UnaryExpression) }*
+addUnaryOperator              = '-.' #FMinus
+                              / '-' #Minus
+                              / '!' #LogicalNot
+UnaryExpression               = FunctionCall
+                              / { addUnaryOperator _ $(UnaryExpression) }
+addRelationalOperator         = '<>' #NotEquals
+                              / '<' ('=' #LessThanEquals / #LessThan)
+                              / '>' ('=' #GreaterThanEquals / #GreaterThan)
+FunctionCall                  = WriteArrayElementExpression {$ _ $(ActualArgList) #FunctionCall }?
+ActualArgList                 = { $(WriteArrayElementExpression) ( _ $(WriteArrayElementExpression) )* #ActualArgList }
+WriteArrayElementExpression   = ReadArrayElementExpression {$ '.' '(' _ $(Expression) _ ')' _ '<-' _ $(Expression) #WriteArrayElement }?
+ReadArrayElementExpression    = SimpleExpression {$ '.' '(' _ $(Expression) _ ')' _ !'<-' #ReadArrayElement }*
+SimpleExpression              = '(' _ Expression _ ')'
+                              / '(' _ ')'
+                              / Bool
+                              / Number
+                              / Identifier
+Bool                          = { "true" #True / "false" #False }
+Number                        = { DIGIT ('.' DIGIT #Float / #Integer) }
+DIGIT                         = [0-9]+
+Identifier                    = !KEYWORD { W #Name }
+
+// formatted by $ nez format
