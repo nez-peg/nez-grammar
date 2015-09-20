@@ -558,6 +558,60 @@ example NumericLiteral&Expression ~49f8117 '''
 example RegularExpressionLiteral&Expression ~b135e0d9 '''
 /.*(?=#[^\s]*$)/
 '''
+
+// A simple recursive function
+example File '''
+function factorial(n) {
+    if (n == 0) {
+        return 1;
+    }
+    return n * factorial(n - 1);
+}
+'''
+
+// Anonymous function (or lambda) syntax and closure example:
+example File '''
+var displayClosure = function() {
+    var count = 0;
+    return function () {
+        return ++count;
+    };
+}
+var inc = displayClosure();
+inc(); // returns 1
+inc(); // returns 2
+inc(); // returns 3
+'''
+
+// Variadic function demonstration (arguments is a special variable)
+example File '''
+var sum = function() {
+    var i, x = 0;
+    for (i = 0; i < arguments.length; ++i) {
+        x += arguments[i];
+    }
+    return x;
+}
+sum(1, 2, 3); // returns 6
+'''
+
+// Immediately-invoked function expressions allow functions to pass around variables under their own closures.
+example File '''
+var v;
+v = 1;
+var getValue = (function(v) {
+  return function() {return v;};
+})(v);
+
+v = 2;
+
+getValue(); // 1
+'''
+
+
+
+/* Formatter */
+
 format #Source[*] `$[0 `${NL}` -1]`
 format #FuncDecl[*] `function $[0] $[1]`
 format #FuncDecl[*] `function $[0] $[1] $[2]`
