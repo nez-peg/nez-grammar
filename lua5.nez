@@ -140,27 +140,27 @@ Arguments                       = '(' __ UnpackExpressionList __ ')'
 TableArgument                   = { $(TableConstructor) #List }
 StringArgument                  = { $(StringLiteral) #List }
 LeftHandSideExpression          = CallExpression
-PowerExpression                 = { $(LeftHandSideExpression) __ "^" #Power __ $(PowerExpression) }
+PowerExpression                 = { $left(LeftHandSideExpression) __ "^" #Power __ $right(PowerExpression) }
                                 / LeftHandSideExpression
 UnaryExpression                 = PowerExpression
-                                / { addUnaryOperator _ $(UnaryExpression) }
+                                / { addUnaryOperator _ $expr(UnaryExpression) }
 addUnaryOperator                = "+" #Plus
                                 / "-" #Minus
                                 / "#" #Count
                                 / "not" #LogicalNot
-MultiplicativeExpression        = UnaryExpression {$ __ ("*" #Mul / "/" #Div / "%" #Mod) __ $(UnaryExpression) }*
-AdditiveExpression              = MultiplicativeExpression {$ __ ("+" #Add / "-" #Sub) __ $(MultiplicativeExpression) }*
-ConcatExpression                = { $(AdditiveExpression) __ ".." #Concat __ $(ConcatExpression) }
+MultiplicativeExpression        = UnaryExpression {$left __ ("*" #Mul / "/" #Div / "%" #Mod) __ $right(UnaryExpression) }*
+AdditiveExpression              = MultiplicativeExpression {$left __ ("+" #Add / "-" #Sub) __ $right(MultiplicativeExpression) }*
+ConcatExpression                = { $left(AdditiveExpression) __ ".." #Concat __ $right(ConcatExpression) }
                                 / AdditiveExpression
-EqualityExpression              = ConcatExpression {$ __ addEqualityOperator __ $(ConcatExpression) }*
+EqualityExpression              = ConcatExpression {$left __ addEqualityOperator __ $right(ConcatExpression) }*
 addEqualityOperator             = "<=" #LessThanEquals
                                 / ">=" #GreaterThanEquals
                                 / "<" #LessThan
                                 / ">" #GreaterThan
                                 / "==" #Equals
                                 / "~=" #NotEquals
-LogicalANDExpression            = EqualityExpression {$ __ "and" __ $(EqualityExpression) #LogicalAnd }*
-LogicalORExpression             = LogicalANDExpression {$ __ "or" __ $(LogicalANDExpression) #LogicalOr }*
+LogicalANDExpression            = EqualityExpression {$left __ "and" __ $right(EqualityExpression) #LogicalAnd }*
+LogicalORExpression             = LogicalANDExpression {$left __ "or" __ $right(LogicalANDExpression) #LogicalOr }*
 Expression                      = FunctionExpression
                                 / LogicalORExpression
 ExpressionListItem              = VariadicParameter
@@ -186,22 +186,22 @@ LastOnlyStatement               = ReturnStatement
                                 / BreakStatement
 BlockStatement                  = "do" __ Block __ "end" EOS?
 VariableStatement               = { "local" __ $(IdentifierList) ( __ "=" __ $(ExpressionList) )? EOS #MultiVarDecl }
-AssignmentStatement             = { $(LeftHandSideExpressionList) __ "=" __ $(ExpressionList) EOS #MultiAssign }
-IfStatement                     = { "if" __ $(Expression) __ "then" __ $(Block) __ ( elseClause / elsifClause )? __ "end" EOS? #If }
-elsifClause                     = $({ "elseif" __ $(Expression) __ "then" __ $(Block) ( elseClause / elsifClause )? #If })
-elseClause                      = "else" __ $(Block)
-RepeatStatement                 = { "repeat" __ $(Statement) __ "until" __ $(Expression) EOS #DoWhile }
-WhileStatement                  = { "while" __ $(Expression) __ $(BlockStatement) #While }
+AssignmentStatement             = { $var(LeftHandSideExpressionList) __ "=" __ $expr(ExpressionList) EOS #MultiAssign }
+IfStatement                     = { "if" __ $cond(Expression) __ "then" __ $then(Block) __ ( elseClause / elsifClause )? __ "end" EOS? #If }
+elsifClause                     = $({ "elseif" __ $cond(Expression) __ "then" __ $then(Block) ( elseClause / elsifClause )? #If })
+elseClause                      = "else" __ $else(Block)
+RepeatStatement                 = { "repeat" __ $body(Statement) __ "until" __ $cond(Expression) EOS #DoWhile }
+WhileStatement                  = { "while" __ $expr(Expression) __ $body(BlockStatement) #While }
 ForStatement                    = { "for" __ $(Identifier) __ "=" __ $(Expression) __ "," __ $(Expression) __ ( "," __ $(Expression) __ )? $(BlockStatement) #ForInRange }
 ForEachStatement                = { "for" __ $(IdentifierList) __ "in" __ $(ExpressionList) __ $(BlockStatement) #Foreach }
 BreakStatement                  = { "break" EOS #Break }
-ReturnStatement                 = { "return" ( _ $(ExpressionList) )? EOS #Return }
+ReturnStatement                 = { "return" ( _ $expr(ExpressionList) )? EOS #Return }
 
 //Program
 //==========
 FunctionExpression              = { "function" __ addFuncBody "end" EOS? #FuncDecl }
 FunctionDeclaration             = { "function" __ addMethodName __ $(FunctionDeclarationBody) __ "end" EOS? #Method }
-                                / { "function" __ $(FuncName) __ $(FunctionDeclarationBody) __ "end" EOS? #Assign }
+                                / { "function" __ $left(FuncName) __ $right(FunctionDeclarationBody) __ "end" EOS? #Assign }
 addLocalFunction                = $(LocalFunctionVarDeclPart) $(LocalFunctionBody) __ "end" EOS?
 LocalFunctionVarDeclPart        = { "local" __ "function" __ $(LocalFunctionName) #VarDecl }
 LocalFunctionName               = { &$(Identifier) #List }
@@ -209,7 +209,7 @@ LocalFunctionBody               = { $(Identifier) __ $(FunctionDeclarationBody) 
 FuncName                        = Identifier {$ __ "." __ $(Identifier) #Field }*
 addMethodName                   = $(FuncName) __ ":" __ $(Identifier)
 FunctionDeclarationBody         = { addFuncBody #FuncDecl }
-addFuncBody                     = $(ParameterList) __ $(Block)
+addFuncBody                     = $param(ParameterList) __ $body(Block)
 ParameterList                   = { '(' __ addParameterList? __ ')' #List }
 addParameterList                = $(VariadicParameter)
                                 / $(Identifier) ( __ ',' __ $(Identifier) )* ( __ ',' __ $(VariadicParameter) )?
@@ -232,8 +232,8 @@ NumericLiteral                  = HexIntegerLiteral
                                 / DecimalIntergerLiteral
 DecimalIntergerLiteral          = { DECIMAL_INTEGER #Integer }
 HexIntegerLiteral               = { '0' [xX] HEX* #HexInteger }
-FloatingPointLiteral            = { DECIMAL_INTEGER? '.' DIGIT+ EXPONENT_PART? #FloatingPointNumber }
-                                / { DECIMAL_INTEGER EXPONENT_PART #FloatingPointNumber }
+FloatingPointLiteral            = { DECIMAL_INTEGER? '.' DIGIT+ EXPONENT_PART? #Double }
+                                / { DECIMAL_INTEGER EXPONENT_PART #Double }
 DECIMAL_INTEGER                 = [1-9] DIGIT*
                                 / "0"
 EXPONENT_PART                   = [eE] SIGN? DECIMAL_INTEGER
@@ -275,7 +275,7 @@ a.b[0]
 example A '''
 a.b[0][0]
 '''
-example VariableStatement&Statement '''
+example VariableStatement&Statement ~15c0620 '''
 local a,b,c = 1,2,3;
 '''
 example AssignmentStatement&Statement '''
@@ -284,7 +284,7 @@ A  x, y = y, x;
 example AssignmentStatement&Statement '''
 A  a.b = 1;
 '''
-example IfStatement&Statement '''
+example IfStatement&Statement ~cb23ebe '''
 if n < 10 then return n end
 '''
 example IfStatement&Statement '''
@@ -294,7 +294,7 @@ example IfStatement&Statement '''
 if n < 10 then return n elseif n == 0 then return 0 else return -1 end
 '''
 example ForStatement&Statement '''
-for var = e1, e2, e3 do break end]
+for var = e1, e2, e3 do break end
 '''
 example ForEachStatement&Statement '''
 for k,v in list do end
@@ -317,52 +317,40 @@ function g:m(a, b, ...) end
 example FunctionDeclaration '''
 function r() return 1,2,3 end
 '''
-example BooleanLiteral&Literal '''
+example BooleanLiteral&Literal ~1e4f2d3 '''
 true
 '''
-example NumericLiteral '''
-0x1F
-'''
-example NumericLiteral '''
-0.12
-'''
-example NumericLiteral '''
-1234
-'''
-example DecimalIntergerLiteral&Expression '''
+example DecimalIntergerLiteral&Expression ~6db38 '''
 123
 '''
-example HexIntegerLiteral&Expression '''
+example HexIntegerLiteral&Expression ~e2d592 '''
 0xa12
 '''
-example FloatingPointLiteral&Expression '''
+example FloatingPointLiteral&Expression ~34726e '''
 12.456
 '''
-example FloatingPointLiteral&Expression '''
+example FloatingPointLiteral&Expression ~182b0b '''
 12.456e-78
 '''
 example FloatingPointLiteral&Expression '''
 0.12
 '''
-example FloatingPointLiteral&Expression '''
+example FloatingPointLiteral&Expression ~0f800a4 '''
 .12
 '''
-example FloatingPointLiteral&Expression '''
-.12
-'''
-example FloatingPointLiteral&Expression '''
+example FloatingPointLiteral&Expression ~1143ad '''
 .12e3
 '''
-example FloatingPointLiteral&Expression '''
+example FloatingPointLiteral&Expression ~85018a '''
 5e3
 '''
-example StringLiteral '''
+example StringLiteral ~ca45b4 '''
 '\97lo\10\04923"'
 '''
-example StringLiteral '''
+example StringLiteral ~1055b4 '''
 [[foobar123]]
 '''
-example StringLiteral '''
+example StringLiteral ~12f1ea '''
 [==[foo[bar]123]==]
 '''
 
