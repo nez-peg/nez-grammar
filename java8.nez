@@ -529,8 +529,8 @@ OCTAL                              = '0' ( '_'* [0-7] )*
 DIGIT                              = [0-9]
 HEX                                = [a-fA-F0-9]
 INT_SUFFIX                         = [lL]
-FloatingPointLiteral               = { FLOAT #Float } FLOAT_SUFFIX? _
-                                   / { DECIMAL #Float } FLOAT_SUFFIX _
+FloatingPointLiteral               = { FLOAT #Double (FLOAT_SUFFIX #Float)? }  _
+                                   / { DECIMAL #Double } FLOAT_SUFFIX _
 FLOAT                              = FRACTION EXPONENT?
                                    / DIGIT+ EXPONENT
 FLOAT_SUFFIX                       = [fFdD]
@@ -555,9 +555,165 @@ HEX4                               = HEX HEX HEX HEX
 
 /* Example */
 
-example Expression ~1951c650 '''
+// The traditional "Hello, world!" program can be written in Java 
+example TypeDeclaration&File '''
+class HelloWorldApp {
+    public static void main(String[] args) {
+        System.out.println("Hello World!"); // Prints the string to the console.
+    }
+}
+'''
+
+// Generics
+example File '''
+package java.util.List;
+public interface List<E> { 
+    void add(E x);
+    Iterator<E> iterator();
+}
+'''
+
+// Generic Method
+example MethodDeclaration '''
+public void doSomething(List<? extends MyClass> list) {
+  for(MyClass object : list) { // OK
+    // do something
+  }
+}
+'''
+
+// Generic Method
+example MethodDeclaration '''
+public static <Type> Entry<Type, Type> twice(Type value) {
+    return new Entry<Type, Type>(value, value);
+}
+'''
+
+// Generics in throws clause
+example MethodDeclaration '''
+public <T extends Throwable> void throwMeConditional(boolean conditional, T exception) throws T {
+    if(conditional) {
+        throw exception;
+    }
+}
+'''
+
+/* Statement */
+
+example Statement '''
+if(c);
+'''
+
+example Statement '''
+if(c) {
+}
+'''
+
+/* Expression (standard) */
+
+example Expression ~7d9419 '''
+1+2*3
+'''
+
+example Expression ~bfe331 '''
+1*2+3
+'''
+
+example Expression ~162311 '''
+(1+2)*3
+'''
+
+example Expression ~cd4f5d '''
+1+2-3*4%5
+'''
+
+example Expression '''
+x = x + 1
+'''
+
+example Expression '''
+x = x | 1
+'''
+
+example Expression '''
+x = x & 1
+'''
+
+
+/* Expression (local) */
+
+example Expression '''
+() -> {
+  System.out.println("example");
+}
+'''
+
+/* Identifier (standard) */
+
+example Expression ~a47e9fd '''
+x
+''' 
+
+example Expression  ~fdb051 '''
+Apple
+''' 
+
+/* Literal (standard) */
+
+example Literal ~1e4f2d '''
+true
+'''
+
+example Literal ~4eab66 '''
+false
+'''
+
+example Literal ~ec2775 '''
+'C'
+'''
+
+example Literal ~1951c6 '''
 0
 '''
+
+example Literal ~aef181 '''
+26
+'''
+
+example Literal ~c3b9d6 '''
+0x1a
+'''
+
+example Literal ~146f59 '''
+0b11010
+'''
+
+example Literal ~f74a78 '''
+123.4
+'''
+
+example Literal ~94b99c '''
+1.234e2
+'''
+
+example Literal ~c83c217 '''
+123.4f
+'''
+
+example Literal ~02bf7f6 '''
+"hello,world\n"
+'''
+
+/* Literal (standard) */
+
+example Literal ~db9f5e3 '''
+"S\u00ED Se\u00F1or"
+'''
+
+
+
+
+
 
 format #PackageDeclaration[*] `package $[0];`
 format #PackageDeclaration[*] `package $[0];`
