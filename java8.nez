@@ -210,16 +210,16 @@ _ElementValueList                   = $(ElementValue) ( "," $(ElementValue) )*
 example Annotations ~b791a3 @A @A() @A({1,2})
 
 // Declaration
-VariableDeclaration                = { $anno(VariableModifiers)? $t(Type) $(InitDeclList) #Declaration }
+VariableDeclaration                = { $anno(VariableModifiers)? $type(Type) $list(InitDeclList) #VarDecl }
 VariableModifier                   = Annotation
                                    / "final" { #Final }
-VariableModifiers                  = { $(VariableModifier) $(VariableModifier)* #Modifiers }
-InitDeclList                       = { $(InitDecl) ( "," $(InitDecl) )* #CommaList }
-InitDecl                           = { $(VarName) ( "=" $(Initializer) )? #VarDecl }
-VarName                            = Identifier {$ "[" $(ConstantExpression)? "]" #VarName }*
+VariableModifiers                  = { $(VariableModifier)+ #Modifiers }
+InitDeclList                       = { $(InitDecl) ( "," $(InitDecl) )* #List }
+InitDecl                           = { $name(VarName) ( "=" $expr(Initializer) )? #VarDecl }
+VarName                            = Identifier {$name "[" $size(ConstantExpression)? "]" #ArrayName }*
 Initializer                        = Expression
                                    / ArrayInitializer
-ArrayInitializer                   = { "{" ( $(Initializer) ( "," $(Initializer) )* )? ","? "}" #Array }
+ArrayInitializer                   = { "{" ( $(Initializer) ( "," $(Initializer) )* )? ","? "}" #List }
 
 //class type, enum type
 ClassDeclaration                   = { $(ClassModifiers)? "class" $(Identifier) $(TypeParameters)? $(SuperClass)? $(SuperInterfaces)* $(ClassBody) #ClassDeclaration }
@@ -389,27 +389,27 @@ Block                              = { "{" ( $(Statement) / $(LocalDeclaration) 
 LocalDeclaration                   = VariableDeclaration ";"
                                    / ClassDeclaration
 Statement                          = Block
-                                   / { "assert" $(Expression) ( ":" $(Expression) )? ";" #Assert }
-                                   / { "if" "(" $(Expression) ")" $(Statement) ( "else" $(Statement) )? #If }
-                                   / { "switch" "(" $(Expression) ")" $(Statement) #Switch }
-                                   / { "while" "(" $(Expression) ")" $(Statement) #While }
-                                   / { "do" $(Statement) "while" "(" $(Expression) ")" ";" #DoWhile }
-                                   / { "for" "(" $(Expressions)? ";" $(Expression)? ";" $(Expressions)? ")" $(Statement) #For }
-                                   / { "for" "(" $(VariableDeclaration) ";" $(Expression)? ";" $(Expressions)? ")" $(Statement) #For }
-                                   / { "for" "(" $(VariableModifiers)? $(Type) $(Identifier) ":" $(Expression) ")" $(Statement) #ForEach }
-                                   / { "goto" $(Identifier) ";" #Goto }
-                                   / { "continue" $(Identifier)? ";" #Continue }
-                                   / { "break" $(Identifier)? ";" #Break }
-                                   / { "return" $(Expression)? ";" #Return }
+                                   / { "assert" $cond(Expression) ( ":" $msg(Expression) )? ";" #Assert }
+                                   / { "if" "(" $cond(Expression) ")" $then(Statement) ( "else" $else(Statement) )? #If }
+                                   / { "switch" "(" $cond(Expression) ")" $body(Statement) #Switch }
+                                   / { "while" "(" $cond(Expression) ")" $body(Statement) #While }
+                                   / { "do" $body(Statement) "while" "(" $cond(Expression) ")" ";" #DoWhile }
+                                   / { "for" "(" $init(Expressions)? ";" $cond(Expression)? ";" $iter(Expressions)? ")" $body(Statement) #For }
+                                   / { "for" "(" $init(VariableDeclaration) ";" $cond(Expression)? ";" $iter(Expressions)? ")" $body(Statement) #For }
+                                   / { "for" "(" $anno(VariableModifiers)? $type(Type) $name(Identifier) ":" $iter(Expression) ")" $body(Statement) #ForEach }
+                                   / { "goto" $label(Identifier) ";" #Goto }
+                                   / { "continue" $label(Identifier)? ";" #Continue }
+                                   / { "break" $label(Identifier)? ";" #Break }
+                                   / { "return" $expr(Expression)? ";" #Return }
                                    / { "try" $(ResourceStatement) $(Block) $(CatchBlock)* $({ "finally" $(Block) #Finally })? #Try }
                                    / { "try" $(Block) $(CatchBlock)* $({ "finally" $(Block) #Finally }) #Try }
                                    / { "try" $(Block) $(CatchBlock)+ #Try }
-                                   / { "throw" $(Expression) ";" #Throw }
-                                   / { "synchronized" "(" $(Expression) ")" $(Block) #Synchronized }
-                                   / { "case" $(ConstantExpression) ":" ( !"case" !"default" $(Statement) )* #SwitchCase }
+                                   / { "throw" $expr(Expression) ";" #Throw }
+                                   / { "synchronized" "(" $expr(Expression) ")" $body(Block) #Synchronized }
+                                   / { "case" $cond(ConstantExpression) ":" ( !"case" !"default" $(Statement) )* #SwitchCase }
                                    / { "default" ":" ( !"case" $(Statement) )* #SwitchDefault }
-                                   / { $(Identifier) ":" #Label }
-                                   / { $(Expression) ";" #ExpressionStatement }
+                                   / { $label(Identifier) ":" #Label }
+                                   / { $expr(Expression) ";" #Expression }
                                    / { ";" #Empty }
 
 //trycatch
@@ -424,12 +424,12 @@ CatchParameter                     = { $(VariableModifiers)? $(ClassOrInterfaceT
 //format #Void[1] `void($[0])`
 //format #TypeOf[1] `typeof($[0])`
 /* Primary */
+Expressions                        = { $(Expression) ( "," $(Expression) )* #List }
 Expression                         = LambdaExpression
                                    / AssignmentExpression
-Expressions                        = { $(Expression) ( "," $(Expression) )* #Expressions }
-AssignmentExpression               = { $(UnaryExpression) addAssignmentOperator $(Expression) }
+AssignmentExpression               = { $left(UnaryExpression) _AssignmentOperator $right(Expression) }
                                    / ConditionalExpression
-addAssignmentOperator              = "=" #Assign
+_AssignmentOperator                = "=" #Assign
                                    / "*=" #AssignMul
                                    / "/=" #AssignDiv
                                    / "%=" #AssignMod
@@ -442,30 +442,30 @@ addAssignmentOperator              = "=" #Assign
                                    / "^=" #AssignBitwiseXOr
                                    / "|=" #AssignBitwiseOr
 ConstantExpression                 = ConditionalExpression
-ConditionalExpression              = LogicalOrExpression {$ "?" $(Expression) ":" $(LogicalOrExpression) #Conditional }*
-LogicalOrExpression                = LogicalAndExpression {$ "||" $(LogicalAndExpression) #Or }*
-LogicalAndExpression               = InclusiveOrExpression {$ "&&" $(InclusiveOrExpression) #And }*
-InclusiveOrExpression              = ExclusiveOrExpression {$ "|" $(ExclusiveOrExpression) #BitwiseOr }*
-ExclusiveOrExpression              = AndExpression {$ "^" $(AndExpression) #BitwiseXor }*
-AndExpression                      = EqualityExpression {$ "&" $(EqualityExpression) #BitwiseAnd }*
-EqualityExpression                 = RelationalExpression {$ ("==" #Equals / "!=" #NotEquals) $(RelationalExpression) }*
+ConditionalExpression              = LogicalOrExpression {$cond "?" $then(Expression) ":" $else(LogicalOrExpression) #Conditional }*
+LogicalOrExpression                = LogicalAndExpression {$left "||" $right(LogicalAndExpression) #Or }*
+LogicalAndExpression               = InclusiveOrExpression {$left "&&" $right(InclusiveOrExpression) #And }*
+InclusiveOrExpression              = ExclusiveOrExpression {$left "|" $right(ExclusiveOrExpression) #BitwiseOr }*
+ExclusiveOrExpression              = AndExpression {$left "^" $right(AndExpression) #BitwiseXor }*
+AndExpression                      = EqualityExpression {$left "&" $right(EqualityExpression) #BitwiseAnd }*
+EqualityExpression                 = RelationalExpression {$left ("==" #Equals / "!=" #NotEquals) $right(RelationalExpression) }*
 relationalOperator                 = "<=" #LessThanEquals
                                    / ">=" #GreaterThanEquals
                                    / "<" #LessThan
                                    / ">" #GreaterThan
-RelationalExpression               = ShiftExpression {$ relationalOperator $(ShiftExpression) / "instanceof" $(ReferenceType) #InstanceOf }*
-ShiftExpression                    = AdditiveExpression {$ ("<<" #LeftShift / ">>" #ArithmeticRightShift / ">>>" #LogicalRightShift) $(AdditiveExpression) }*
-AdditiveExpression                 = MultiplicativeExpression {$ ("+" #Add / "-" #Sub) $(MultiplicativeExpression) }*
-MultiplicativeExpression           = CastNewExpression {$ ("*" #Mul / "/" #Div / "%" #Mod) $(CastNewExpression) }*
-CastNewExpression                  = { "(" $(Type) ")" $(CastNewExpression) #Cast }
+RelationalExpression               = ShiftExpression {$left relationalOperator $right(ShiftExpression) / "instanceof" $right(ReferenceType) #InstanceOf }*
+ShiftExpression                    = AdditiveExpression {$left ("<<" #LeftShift / ">>" #ArithmeticRightShift / ">>>" #LogicalRightShift) $right(AdditiveExpression) }*
+AdditiveExpression                 = MultiplicativeExpression {$left ("+" #Add / "-" #Sub) $right(MultiplicativeExpression) }*
+MultiplicativeExpression           = CastNewExpression {$left ("*" #Mul / "/" #Div / "%" #Mod) $right(CastNewExpression) }*
+CastNewExpression                  = { "(" $type(Type) ")" $expr(CastNewExpression) #Cast }
                                    / UnaryExpression
 UnaryExpression                    = PostfixExpression
-                                   / { "++" $(UnaryExpression) #PrefixInc }
-                                   / { "--" $(UnaryExpression) #PrefixDec }
-                                   / { "+" $(CastNewExpression) #Plus }
-                                   / { "-" $(CastNewExpression) #Minus }
-                                   / { "~" $(CastNewExpression) #Compl }
-                                   / { "!" $(CastNewExpression) #Not }
+                                   / { "++" $expr(UnaryExpression) #PrefixInc }
+                                   / { "--" $expr(UnaryExpression) #PrefixDec }
+                                   / { "+" $expr(CastNewExpression) #Plus }
+                                   / { "-" $expr(CastNewExpression) #Minus }
+                                   / { "~" $expr(CastNewExpression) #Compl }
+                                   / { "!" $expr(CastNewExpression) #Not }
 PostfixExpression                  = PrimaryExpression {$ addMethodCall / addInstanceCreation / addIndex / addField / addMethodReference / addInc / addDec }*
 addMethodCall                      = "." $(TypeArguments)? $(Identifier) $({ "(" addArgumentExpressionList? ")" #List }) #Method
 addInstanceCreation                = "." "new" $(TypeArguments)? $(Annotations)? $(ClassOrInterfaceType) $({ "(" addArgumentExpressionList? ")" #List }) $(ClassBody)? #InstanceCreation
@@ -495,6 +495,7 @@ InstanceCreationExpression         = { "new" $(TypeArguments)? $(Annotations)? $
 ArrayCreationExpression            = { "new" $(Annotations)? $(NonArrayType {$ $(Annotations)? "[" $(Expression) "]" #ArraySize }+ {$ $(Annotations)? "[" "]" #ArraySize }*) #ArrayCreation }
                                    / { "new" $(Annotations)? $(NonArrayType {$ $(Annotations)? "[" "]" #ArraySize }+) $(ArrayInitializer) #ArrayCreation }
 MethodReference                    = { $(ReferenceType) "::" $(TypeArguments)? $(Identifier / { "new" #Name }) #MethodReference }
+
 LambdaExpression                   = { $(LambdaParameters) "->" $(LambdaBody) #Lambda }
 LambdaParameters                   = { ($(Identifier) / $({ "(" addArgumentExpressionList? ")" #AddArgumentExpressionList }) / "(" $(InferredFormalParameterList) ")") #LambdaParameters }
 InferredFormalParameterList        = { $(Identifier) ( "," $(Identifier) )* #InferredFormalParameterList }
@@ -505,7 +506,7 @@ LambdaBody                         = Expression
 //Name
 //	= { NAME #Name } _
 Identifier                         = { NAME #Name } _
-QualifiedName                      = Identifier {$ "." $(Identifier) #QualifiedName }*
+QualifiedName                      = Identifier {$prefix "." $name(Identifier) #QualifiedName }*
 W                                  = [a-zA-Z0-9_$]
 NAME                               = !DIGIT !( KEYWORD !W ) W+
 
@@ -520,9 +521,9 @@ Literal                            = FloatingPointLiteral
                                    / StringLiteral
                                    / NullLiteral
 Constant                           = Literal
-NullLiteral                        = { "null" #Null }
-BooleanLiteral                     = { "true" #True }
-                                   / { "false" #False }
+NullLiteral                        = {  #Null } "null"
+BooleanLiteral                     = {  #True } "true"
+                                   / { #False } "false" 
 IntegerLiteral                     = { (DECIMAL / HEXADECIMAL / BINARY / OCTAL) (INT_SUFFIX #Long / FLOAT_SUFFIX #Float / #Integer) } _
 DECIMAL                            = '0' ![bBxX0-9_]
                                    / [1-9] ( '_'* DIGIT )*
