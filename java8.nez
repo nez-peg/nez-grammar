@@ -210,8 +210,7 @@ _ElementValueList                   = $(ElementValue) ( "," $(ElementValue) )*
 example Annotations ~b791a3 @A @A() @A({1,2})
 
 // Declaration
-//local variable
-VariableDeclaration                = { $(VariableModifiers)? $(Type) $(InitDeclList) #Declaration }
+VariableDeclaration                = { $anno(VariableModifiers)? $t(Type) $(InitDeclList) #Declaration }
 VariableModifier                   = Annotation
                                    / "final" { #Final }
 VariableModifiers                  = { $(VariableModifier) $(VariableModifier)* #Modifiers }
