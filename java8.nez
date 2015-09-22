@@ -1,6 +1,5 @@
 /**
  * Java8 Grammar
- *
  *  Based on grammar from Java8 langauge specification
  *
  * [1] https://docs.oracle.com/javase/specs/jls/se8/html/jls-2.html#jls-2.4
@@ -127,6 +126,8 @@ EOT                                = !.
 "void"                             = 'void' !W _
 "volatile"                         = 'volatile' !W _
 "while"                            = 'while' !W _
+
+/* Keyword */
 KEYWORD                            = "abstract"
                                    / "assert"
                                    / "boolean"
@@ -185,25 +186,28 @@ KEYWORD                            = "abstract"
 TopLevel                           = PackageDeclaration
                                    / ImportDeclaration
                                    / TypeDeclaration
-PackageDeclaration                 = { $(Annotations)? "package" $(QualifiedName) #PackageDeclaration } ";"
-ImportDeclaration                  = { "import" ("static" #StaticImportDeclaration / #ImportDeclaration) $(PackageName) } ";"
+PackageDeclaration                 = { $anno(Annotations)? "package" $name(QualifiedName) #PackageDeclaration } ";"
+ImportDeclaration                  = { "import" ("static" #StaticImportDeclaration / #ImportDeclaration) $name(PackageName) } ";"
 PackageName                        = QualifiedName {$ "." "*" #WildCardName }?
+
 TypeDeclaration                    = ClassDeclaration
                                    / InterfaceDeclaration
                                    / { ";" #Empty }
 
 /* Annotation */
 Annotations                        = { $(Annotation) $(Annotation)* #Modifiers }
-Annotation                         = "@" { $(QualifiedName) "(" $(ElementValuePairList)? ")" #Annotation }
-                                   / "@" { $(QualifiedName) "(" $(ElementValue) ")" #Annotation }
-                                   / "@" { $(QualifiedName) #Annotation }
-ElementValuePairList               = { $(ElementValuePair) ( "," $(ElementValuePair) )* #CommaList }
-ElementValuePair                   = { $(Identifier) "=" $(ElementValue) #KeyValue }
+Annotation                         = "@" { $key(QualifiedName) "(" $value(ElementValuePairList)? ")" #Annotation }
+                                   / "@" { $key(QualifiedName) "(" $value(ElementValue) ")" #Annotation }
+                                   / "@" { $key(QualifiedName) #Annotation }
+ElementValuePairList               = { $(ElementValuePair) ( "," $(ElementValuePair) )* #List }
+ElementValuePair                   = { $key(Identifier) "=" $value(ElementValue) #KeyValue }
 ElementValue                       = ElementValueArrayInitializer
                                    / ConditionalExpression
                                    / Annotation
-ElementValueArrayInitializer       = "{" { $(ElementValueList)? #ElementValueArrayInitializer } ","? "}"
-ElementValueList                   = { $(ElementValue) ( "," $(ElementValue) )* #List }
+ElementValueArrayInitializer       = "{" { _ElementValueList? #List } ","? "}"
+_ElementValueList                   = $(ElementValue) ( "," $(ElementValue) )*
+
+example Annotations ~b791a3 @A @A() @A({1,2})
 
 // Declaration
 //local variable
@@ -573,6 +577,20 @@ public interface List<E> {
 }
 '''
 
+// Annotation
+example File '''
+@Entity                                             // Declares this an entity bean
+@Table(name = "people")                             // Maps the bean to SQL table "people"
+public class Person implements Serializable {
+    @Id                                             // Map this to the primary key column.
+    @GeneratedValue(strategy = GenerationType.AUTO) // Database will generate new primary keys, not us.
+    private Integer id;
+
+    @Column(length = 32)                            // Truncate column values to 32 characters.
+    private String name;
+}
+'''
+
 // Generic Method
 example MethodDeclaration '''
 public void doSomething(List<? extends MyClass> list) {
@@ -595,6 +613,30 @@ public <T extends Throwable> void throwMeConditional(boolean conditional, T exce
     if(conditional) {
         throw exception;
     }
+}
+'''
+
+/* Variable Declraration */
+
+example VariableDeclaration '''
+int a = 1
+'''
+
+example VariableDeclaration '''
+int a = 1, b
+'''
+
+example VariableDeclaration '''
+int[] anArray = { 
+    1, 2,
+    3, 4
+}
+'''
+
+example VariableDeclaration '''
+String[][] names = {
+  {"Mr. ", "Mrs. ", "Ms. "},
+  {"Smith", "Jones"}
 }
 '''
 
