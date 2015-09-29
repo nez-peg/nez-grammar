@@ -203,12 +203,10 @@ example Directive #include<stdio.h>
 example ExternBlock extern "C" {void add();}
 example FunctionDeclaration '''
 int main(){
-
 }
 '''
 example FunctionDeclaration '''
 static int main(){
-
 }
 '''
 example FunctionDeclaration '''
@@ -287,6 +285,28 @@ StructMemberName           = VarName {$ ":" $(ConstantExpression) #Bit }*
                            / { ":" $(ConstantExpression) #Bit }
 EnumeratorList             = { $(Enumerator) ( "," $(Enumerator) )* ","? #List }
 Enumerator                 = Name {$ "=" $(ConstantExpression) }?
+
+example Type int
+example Type unsigned int
+example Type int[]
+example Type int[][]
+example Type '''
+struct Person{
+int id;
+char* name[20];
+int age;
+}
+'''
+example Type '''
+enum Kitty { MIMI , YUKI = 5 , RENA } cats;
+'''
+example Type '''
+union mydata {
+int i;
+double d;
+char *s;
+};
+'''
 
 // Block, Statement
 //===================
