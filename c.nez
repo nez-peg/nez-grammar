@@ -1,7 +1,7 @@
 // C (ISO/IEC 9899:2011)
 // ===============
 //
-// Based on grammar from ISO/IEC 9899:2011 [1]. 
+// Based on grammar from ISO/IEC 9899:2011 [1].
 //
 // Limitations:
 //
@@ -13,17 +13,7 @@
 // check that I converted the original grammar correctly.
 //
 // [1] ISO/IEC 9899:2011
-export                     = Statement
-                           / Expression
-                           / CInteger
-                           / CFloat
-                           / CString
-                           / CChar
 File                       = _ { ( $(TopLevel) / _ )* #Source } EOT
-Chunk                      = TopLevel
-                           / Statement
-                           / Expression
-                           / Type
 _                          = ( S / BLOCKCOMMENT / LINECOMMENT / ATTRIBUTE )*
 S                          = [ \n\r\t\u000B\u000C]
 BLOCKCOMMENT               = '/*' ( !'*/' . )* '*/'
@@ -128,8 +118,6 @@ KEYWORD                    = 'auto'
 "||"                       = '||' _
 "?"                        = '?' _
 ";"                        = ';' _
-                           / EOL
-  /* this is for debug */
 "}"                        = '}' _
 "->"                       = '->' _
 "enum"                     = 'enum' !W
@@ -158,6 +146,7 @@ KEYWORD                    = 'auto'
 "|="                       = '|=' _
 "="                        = '=' !'=' _
 "."                        = '.' _
+"'"                        = '\'' _
 "sizeof"                   = 'sizeof' !W _
 "typedef"                  = 'typedef' !W _
 "extern"                   = 'extern' !W _
@@ -168,20 +157,25 @@ KEYWORD                    = 'auto'
 "restrict"                 = 'restrict' !W _
 "volatile"                 = 'volatile' !W _
 "__declspec"               = '__declspec' !W _
+"__inline"                 = '__inline' !W _
+"__signed"                 = '__signed' !W _
+"__builtin_va_list"        = '__builtin_va_list' !W _
 "inline"                   = 'inline' !W _
 "_stdcall"                 = '_stdcall' !W _
+"node_type_t"              = 'node_type_t' !W _
 "("                        = '(' _
 ")"                        = ')' _
 "#"                        = '#' _
 "include"                  = 'include' !W _
 "define"                   = 'define' !W _
+
 EOT                        = !.
 TopLevel                   = Directive
                            / TypeDef
                            / Declaration
                            / ExternBlock
                            / { #Empty } ";"
-ExternBlock                = _ { "extern" _ "\"C\"" _ "{" ( $(TopLevel) / _ )* "}" #Source } _
+ExternBlock                = _ { 'extern' _ '\"C\"' _ "{" ( $(TopLevel) / _ )* "}" #Source } _
 Declaration                = FunctionDeclaration
                            / StructDeclaration _ ";"
                            / VariableDeclaration
@@ -248,7 +242,7 @@ PrimaryType                = StructDeclaration
                            / { "_Bool" #TBoolean } _
                            / { "_Complex" #TComplex } _
                            / { "__builtin_va_list" #TName } _
-                           / { <isa TypeName> #TTypedef } _
+                           / { <is TypeName> #TTypedef } _
                            / { "node_type_t" #TName } _
                            / { NAME #Name } _
 StructDeclaration          = { "struct" _ $(Name)? addStructMember? #TStruct }
