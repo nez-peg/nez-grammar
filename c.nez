@@ -213,6 +213,12 @@ example FunctionDeclaration '''
 int add(int a, int b){
 }
 '''
+example FunctionDeclaration '''
+int main(){
+int a = add(b,c);
+return a;
+}
+'''
 
 // Declaration
 //==============
