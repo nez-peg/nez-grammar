@@ -328,7 +328,74 @@ Statement                  = Block
                            / TypeDef
                            / { $(Expression) ";" #ExpressionStatement }
                            / { #Empty } ";"
-
+example Block '''
+{
+}
+'''
+example Block '''
+{
+a;
+}
+'''
+example Block '''
+{
+a;
+a;
+}
+'''
+example Statement '''
+if(c){
+}
+'''
+example Statement '''
+if(c){
+}
+else{
+}
+'''
+example Statement '''
+while(c){
+}
+'''
+example Statement '''
+do{
+}
+while(c);
+'''
+example Statement '''
+for(;;){
+}
+'''
+example Statement '''
+for(int i = 0;i<1;i++){
+}
+'''
+example Statement '''
+goto label;
+'''
+example Statement '''
+return;
+'''
+example Statement '''
+continue;
+'''
+example Statement '''
+switch(c) {
+case 0:
+	return false;
+case 1:
+	return true;
+}
+'''
+example Statement '''
+switch(c) {
+case 0:
+case 1:
+	return true;
+default:
+	retrun false;
+}
+'''
 //Expression
 //==========
 Expression                 = AssignmentExpression {$ "," $(AssignmentExpression) #Expression }*
