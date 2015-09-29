@@ -1,7 +1,7 @@
 // C (ISO/IEC 9899:2011)
 // ===============
 //
-// Based on grammar from ISO/IEC 9899:2011 [1]. 
+// Based on grammar from ISO/IEC 9899:2011 [1].
 //
 // Limitations:
 //
@@ -13,17 +13,7 @@
 // check that I converted the original grammar correctly.
 //
 // [1] ISO/IEC 9899:2011
-export                     = Statement
-                           / Expression
-                           / CInteger
-                           / CFloat
-                           / CString
-                           / CChar
 File                       = _ { ( $(TopLevel) / _ )* #Source } EOT
-Chunk                      = TopLevel
-                           / Statement
-                           / Expression
-                           / Type
 _                          = ( S / BLOCKCOMMENT / LINECOMMENT / ATTRIBUTE )*
 S                          = [ \n\r\t\u000B\u000C]
 BLOCKCOMMENT               = '/*' ( !'*/' . )* '*/'
@@ -128,8 +118,6 @@ KEYWORD                    = 'auto'
 "||"                       = '||' _
 "?"                        = '?' _
 ";"                        = ';' _
-                           / EOL
-  /* this is for debug */
 "}"                        = '}' _
 "->"                       = '->' _
 "enum"                     = 'enum' !W
@@ -158,6 +146,7 @@ KEYWORD                    = 'auto'
 "|="                       = '|=' _
 "="                        = '=' !'=' _
 "."                        = '.' _
+"'"                        = '\'' _
 "sizeof"                   = 'sizeof' !W _
 "typedef"                  = 'typedef' !W _
 "extern"                   = 'extern' !W _
@@ -168,20 +157,25 @@ KEYWORD                    = 'auto'
 "restrict"                 = 'restrict' !W _
 "volatile"                 = 'volatile' !W _
 "__declspec"               = '__declspec' !W _
+"__inline"                 = '__inline' !W _
+"__signed"                 = '__signed' !W _
+"__builtin_va_list"        = '__builtin_va_list' !W _
 "inline"                   = 'inline' !W _
 "_stdcall"                 = '_stdcall' !W _
+"node_type_t"              = 'node_type_t' !W _
 "("                        = '(' _
 ")"                        = ')' _
 "#"                        = '#' _
 "include"                  = 'include' !W _
 "define"                   = 'define' !W _
+
 EOT                        = !.
 TopLevel                   = Directive
                            / TypeDef
                            / Declaration
                            / ExternBlock
                            / { #Empty } ";"
-ExternBlock                = _ { "extern" _ "\"C\"" _ "{" ( $(TopLevel) / _ )* "}" #Source } _
+ExternBlock                = _ { 'extern' _ '\"C\"' _ "{" ( $(TopLevel) / _ )* "}" #Source } _
 Declaration                = FunctionDeclaration
                            / StructDeclaration _ ";"
                            / VariableDeclaration
@@ -205,6 +199,27 @@ FunctionParamList          = { ( $(FunctionParam) ( "," $(FunctionParam) )* )? (
                            / { _ 'void' _ #List }
 FunctionParam              = { $(Type) _ $(VarName)? #Param } _
 
+example Directive #include<stdio.h>
+example ExternBlock extern "C" {void add();}
+example FunctionDeclaration '''
+int main(){
+}
+'''
+example FunctionDeclaration '''
+static int main(){
+}
+'''
+example FunctionDeclaration '''
+int add(int a, int b){
+}
+'''
+example FunctionDeclaration '''
+int main(){
+int a = add(b,c);
+return a;
+}
+'''
+
 // Declaration
 //==============
 TypeDef                    = { "typedef" _ $(Type) ( _ $(TypeDefName) _ )? ( ',' _ $(TypeDefName) _ )* ";" #TypeDeclaration }
@@ -221,6 +236,18 @@ addInitializerList         = ( $(Designation) / $(Initializer) )? ( "," ($(Desig
 Designation                = { $(Designator)+ "=" $(Initializer) #Designation }
 Designator                 = "[" ConstantExpression "]"
                            / "." Name _
+example TypeDef typedef unsigned char BYTE;
+example TypeDef '''
+typedef struct {
+int no;
+char name[20];
+} PERSON;
+'''
+example VariableDeclaration int a;
+example VariableDeclaration int a,*b,c;
+example VariableDeclaration int a=0;
+example VariableDeclaration int a=0,b=1,c=2;
+example VariableDeclaration int[] a={1,2,3};
 
 //Type
 //====
@@ -248,7 +275,7 @@ PrimaryType                = StructDeclaration
                            / { "_Bool" #TBoolean } _
                            / { "_Complex" #TComplex } _
                            / { "__builtin_va_list" #TName } _
-                           / { <isa TypeName> #TTypedef } _
+                           / { <is TypeName> #TTypedef } _
                            / { "node_type_t" #TName } _
                            / { NAME #Name } _
 StructDeclaration          = { "struct" _ $(Name)? addStructMember? #TStruct }
@@ -264,6 +291,28 @@ StructMemberName           = VarName {$ ":" $(ConstantExpression) #Bit }*
                            / { ":" $(ConstantExpression) #Bit }
 EnumeratorList             = { $(Enumerator) ( "," $(Enumerator) )* ","? #List }
 Enumerator                 = Name {$ "=" $(ConstantExpression) }?
+
+example Type int
+example Type unsigned int
+example Type int[]
+example Type int[][]
+example Type '''
+struct Person{
+int id;
+char* name[20];
+int age;
+}
+'''
+example Type '''
+enum Kitty { MIMI , YUKI = 5 , RENA } cats;
+'''
+example Type '''
+union mydata {
+int i;
+double d;
+char *s;
+};
+'''
 
 // Block, Statement
 //===================
@@ -285,7 +334,74 @@ Statement                  = Block
                            / TypeDef
                            / { $(Expression) ";" #ExpressionStatement }
                            / { #Empty } ";"
-
+example Block '''
+{
+}
+'''
+example Block '''
+{
+a;
+}
+'''
+example Block '''
+{
+a;
+a;
+}
+'''
+example Statement '''
+if(c){
+}
+'''
+example Statement '''
+if(c){
+}
+else{
+}
+'''
+example Statement '''
+while(c){
+}
+'''
+example Statement '''
+do{
+}
+while(c);
+'''
+example Statement '''
+for(;;){
+}
+'''
+example Statement '''
+for(int i = 0;i<1;i++){
+}
+'''
+example Statement '''
+goto label;
+'''
+example Statement '''
+return;
+'''
+example Statement '''
+continue;
+'''
+example Statement '''
+switch(c) {
+case 0:
+	return false;
+case 1:
+	return true;
+}
+'''
+example Statement '''
+switch(c) {
+case 0:
+case 1:
+	return true;
+default:
+	retrun false;
+}
+'''
 //Expression
 //==========
 Expression                 = AssignmentExpression {$ "," $(AssignmentExpression) #Expression }*
@@ -339,6 +455,42 @@ PrimaryExpression          = Constant
                            / CString
                            / "(" Expression ")"
                            / Name
+
+example Expression x=y
+example Expression x+=y
+example Expression x->y
+
+example Expression c?x:y
+example Expression x<<y
+example Expression x>>y
+example Expression x|y
+example Expression x&y
+example Expression x^y
+example Expression ~x
+example Expression x&&y
+example Expression x||y
+example Expression !x
+
+example Expression x==y
+example Expression x!=y
+example Expression x<y
+example Expression x<=y
+
+example Expression x+y
+example Expression x*y
+
+example Expression ++x
+example Expression x++
+
+example Expression x.f
+example Expression x.f(y)
+example Expression x[y]
+example Expression x.f.z
+example Expression x.f(y).z
+
+example Expression "a"
+example Expression (int) x
+example Expression (int *)malloc(sizeof(int) * 100)
 
 //Literal
 //=======
