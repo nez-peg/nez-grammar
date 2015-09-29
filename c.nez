@@ -199,6 +199,23 @@ FunctionParamList          = { ( $(FunctionParam) ( "," $(FunctionParam) )* )? (
                            / { _ 'void' _ #List }
 FunctionParam              = { $(Type) _ $(VarName)? #Param } _
 
+example FunctionDeclaration '''
+int main(){
+
+}
+'''
+	
+example FunctionDeclaration '''
+static int main(){
+
+}
+'''
+
+example FunctionDeclaration '''
+int add(int a, int b){
+}
+'''
+
 // Declaration
 //==============
 TypeDef                    = { "typedef" _ $(Type) ( _ $(TypeDefName) _ )? ( ',' _ $(TypeDefName) _ )* ";" #TypeDeclaration }
