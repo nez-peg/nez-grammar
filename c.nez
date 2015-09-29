@@ -450,6 +450,42 @@ PrimaryExpression          = Constant
                            / "(" Expression ")"
                            / Name
 
+example Expression x=y
+example Expression x+=y
+example Expression x->y
+
+example Expression c?x:y
+example Expression x<<y
+example Expression x>>y
+example Expression x|y
+example Expression x&y
+example Expression x^y
+example Expression ~x
+example Expression x&&y
+example Expression x||y
+example Expression !x
+
+example Expression x==y
+example Expression x!=y
+example Expression x<y
+example Expression x<=y
+
+example Expression x+y
+example Expression x*y
+
+example Expression ++x
+example Expression x++
+
+example Expression x.f
+example Expression x.f(y)
+example Expression x[y]
+example Expression x.f.z
+example Expression x.f(y).z
+
+example Expression "a"
+example Expression (int) x
+example Expression (int *)malloc(sizeof(int) * 100)
+
 //Literal
 //=======
 Constant                   = CFloat
