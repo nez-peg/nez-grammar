@@ -199,18 +199,18 @@ FunctionParamList          = { ( $(FunctionParam) ( "," $(FunctionParam) )* )? (
                            / { _ 'void' _ #List }
 FunctionParam              = { $(Type) _ $(VarName)? #Param } _
 
+example Directive #include<stdio.h>
+example ExternBlock extern "C" {void add();}
 example FunctionDeclaration '''
 int main(){
 
 }
 '''
-	
 example FunctionDeclaration '''
 static int main(){
 
 }
 '''
-
 example FunctionDeclaration '''
 int add(int a, int b){
 }
@@ -232,6 +232,18 @@ addInitializerList         = ( $(Designation) / $(Initializer) )? ( "," ($(Desig
 Designation                = { $(Designator)+ "=" $(Initializer) #Designation }
 Designator                 = "[" ConstantExpression "]"
                            / "." Name _
+example TypeDef typedef unsigned char BYTE;
+example TypeDef '''
+typedef struct {
+int no;
+char name[20];
+} PERSON;
+'''
+example VariableDeclaration int a;
+example VariableDeclaration int a,*b,c;
+example VariableDeclaration int a=0;
+example VariableDeclaration int a=0,b=1,c=2;
+example VariableDeclaration int[] a={1,2,3};
 
 //Type
 //====
