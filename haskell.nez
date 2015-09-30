@@ -10,17 +10,15 @@
  *   Kimio Kuramitsu (https://github.com/kkuramitsu)
  */
 
+ File = Module
+
+// Lexical Syntax
+
 PROGRAM
   = (LEXEME / WS)+
 
 LEXEME
   = QVARID / QCONID / QVARSYM / QCONSYM / Literal / SPECIAL / RESERVEDOP / reservedid
-
-Literal
-  = Float
-  / Integer
-  / Char
-  / String
 
 SPECIAL = [(),;`{}[] / ']'
 
@@ -37,7 +35,9 @@ NL
   = '\n' / '\r\n' / '\r' / [\u000C]
 
 COMMENT
-  = '--' '-'* (!SYMBOL .) (.)* NL
+  = DASHES (!SYMBOL .) (.)* NL
+
+DASHES = '--' '-'*
 
 NCOMMENT
   = '{-' (NCOMMENT / !('{-' / '-}').)* '-}'
@@ -107,6 +107,14 @@ DECIMAL = DIGIT+
 OCTAL = OCTIT+
 HEXADECIMAL = HEXIT+
 
+/* Literals */
+
+Literal
+  = Float
+  / Integer
+  / Char
+  / String
+
 Integer
   = { '0' [oO] OCTAL #OctalInteger }
   / { '0' [xX] HEXADECIMAL #HexaDecimalInteger }
@@ -144,6 +152,8 @@ CNTRL
 GAP
   = '\\' (NL / WHITESTUFF) '\\'
 
+// Module Structure
+
 Module
   = { "module" __ $(ModId) __ $(Exports)? __ "where" __ $(Body)? #Module }
   / { $(Body) #Module }
@@ -156,6 +166,11 @@ Body
 ImportDecls
   = { $(ImportDecl) (__ $(ImportDecl))* #Imports}
 
+TopDecls
+  = { $(TopDecl) (__ $(TopDecl))* #TopDecls}
+
+// Export Lists
+
 Exports
   = { '(' _ $(Export)  (_ ',' _ $(Export))* (_ ',')? _ ')' #Exports}
 
@@ -164,6 +179,8 @@ Export
   / { $(Qtycon) _ '(' _ ('..' / $(Cname) (_ ',' _ $(Cname))* _ )? ')' #Export }
   / { $(Qtycls) _ '(' _ ('..' / $(QVar) (_ ',' _ $(QVar))* _ )? ')' #Export }
   / { "module" __ $(ModId) #Export }
+
+// Import Declarations
 
 ImportDecl
   = { "import" __ ("qualified")? __ $(ModId) (__ "as" __ $(ModId))? __ $(ImportSpec)? #ImportDecl }
@@ -179,15 +196,14 @@ Import
 Cname
   = { ($(Var) / $(Con)) #Cname}
 
-TopDecls
-  = { $(TopDecl) (__ $(TopDecl))* #TopDecls}
+/* Declarations and Bindings */
 
 TopDecl
   = { "type" _ $(SimpleType) _ "=" _ $(Type) #TypeSynonym }
   / { "data" (_ $(Context) _ "=>")? _ $(SimpleType) (_ "=" _ $(Constrs))? (_ $(Deriving))? #DataTypeDecl }
   / { "newtype" (_ $(Context) _ "=>")? _ $(SimpleType) _ "=" _ $(NewConstrs) (_ $(Deriving))? #NewtypeDecl }
-  / { "class" (_ $(Context) _ "=>")? _ $(Tycls) _ $(Tyvar) ( _ "where" _ $(Cdecls))? #Class }
-  / { "instance" (_ $(Context) _ "=>")? _ $(Qtycls) _ $(Inst) ( _ "where" _ $(Idecls))? #Instance }
+  / { "class" (_ $(SContext) _ "=>")? _ $(Tycls) _ $(Tyvar) ( _ "where" _ $(Cdecls))? #Class }
+  / { "instance" (_ $(SContext) _ "=>")? _ $(Qtycls) _ $(Inst) ( _ "where" _ $(Idecls))? #Instance }
   / { "default" _ '(' _ ($(Type) (_ ',' _ $(Type))* )? _ ')' #Default }
   / { "foreign" _ $(FDecl) #Foreign }
   / Decl
@@ -226,6 +242,8 @@ Vars
 Fixity
   = { ("infixl" #Infixl / "infixr" #Infixr / "infix" #Infix) }
 
+// Types
+
 Type
   = { $(BType) _ "->" _ $(Type) #FunctionType }
 
@@ -233,7 +251,7 @@ BType
   = AType {$ $(AType) #TypeApplication }*
 
 AType
-  = Gtycon
+  = GTycon
   / Tyvar
   / { '(' _ $(Type) (_ ',' _ $(Type))+ _ ')' #TuppleType }
   / { '[' _ $(Type) _ ']' #ListType }
@@ -246,22 +264,28 @@ GTycon
   / { '(->)' #FunctionConsturctor }
   / { '('_ ',' (_ ',')* _ ')' #TuppleConstructor }
 
+// Class Assertions and Contexts
+
 Context
   = Class
   / { '(' _ $(Class) (_ ',' _ $(Class)) _ ')' #Classes }
   / { '(' _ ')' #Classes }
 
 Class
-  = { $(QTycls) _ $(Tyvar) #Class }
-  / { $(QTycls) _ '(' _ $(Tyvar) _ $(AType) (_ $(AType))* _ ')' #Class }
+  = { $(Qtycls) _ $(Tyvar) #Class }
+  / { $(Qtycls) _ '(' _ $(Tyvar) _ $(AType) (_ $(AType))* _ ')' #Class }
+
+// Class Declarations
 
 SContext
   = SimpleClass
   / { '(' _ $(SimpleClass) (_ ',' _ $(SimpleClass)) _ ')' #Classes }
   / { '(' _ ')' #Classes }
 
-Class
-  = { $(QTycls) _ $(Tyvar) #Class }
+SimpleClass
+  = { $(Qtycls) _ $(Tyvar) #Class }
+
+// Algebraic Datatype Declarations
 
 SimpleType
   = { $(Tycon) (_ $(Tyvar))* #Type }
@@ -274,10 +298,6 @@ Constr
   / { ($(Btype) / "!" _ $(atype)) _ $(ConOp) _ ($(Btype) / "!" _ $(atype)) #InfixTypeConstructor }
   / { $(con) (_ $(FieldDecl))* #Constructor }
 
-NewConstr
-  = { $(Con) _ $(AType) #NewConstructor }
-  / { $(Con) _ $(Var) _ "::" _ $(Type) #NewConstructor }
-
 FieldDecl
   = { $(Vars) _ "::" _ ($(Type) / "!"  _ $(AType)) #FieldDecl }
 
@@ -285,7 +305,15 @@ Deriving
   = { "deriving" (_ $(DClass))* #Deriving }
 
 DClass
-  = { $(QTycls) #DClass }
+  = { $(Qtycls) #DClass }
+
+// Datatype Renamings
+
+NewConstr
+  = { $(Con) _ $(AType) #NewConstructor }
+  / { $(Con) _ $(Var) _ "::" _ $(Type) #NewConstructor }
+
+// Instance Declarations
 
 Inst
   = { $(GTycon) #Inst }
@@ -293,6 +321,8 @@ Inst
   / { '(' _ $(Tyvar) (_  $(Tyvar))+ _ ')' #Inst }
   / { '[' _ $(Tyvar) _ ']' #Inst }
   / { '(' _ $(Tyvar) _ "->" _ $(Tyvar) _ ')' #Inst }
+
+// Foreign Declarations
 
 FDecl
   = { "import" _ $(CallConv) (_ $(Safety))? (_ $(Impent))? _ $(Var) _ "::" _ $(FType) #DefineVar }
@@ -310,6 +340,8 @@ Expent
 Safety
   = { ("unsafe" / "safe") #Safety }
 
+// Foreign Types
+
 FType
   = { $(FRType) #FType }
   / { $(FAType) _ $(FType) #FType }
@@ -320,6 +352,8 @@ FRType
 
 FAType
   = { $(Qtycon) (_ $(AType))* #FAType }
+
+// Function and Pattern Bindings
 
 Funlhs
   = { $(Var) _ $(Apat) (_ $(Apat))? #Funlhs }
@@ -341,9 +375,14 @@ Guard
   / { "let" _ $(Decls) #LocalDeclaration }
   / { $(InfixExp) #BooleanGuard }
 
+/* Expressions */
+
 Exp
   = { $(InfixExp) _ "::" (_ $(Context) _ "=>")? $(Type) #ExpressionTyoeSignature }
   / { $(InfixExp) #Exp }
+
+/* Operator Applications */
+/* FIXME:priority */
 
 InfixExp
   = { $(LExp) _ $(QOp) _ $(InfixExp) #InfixOperator }
@@ -361,10 +400,9 @@ LExp
 FExp
   = AExp {$ _ $(AExp) #FunctionApply }*
 
-/* FIXME order*/
 AExp
-  = AExpInner
-  / AExpInner {$ _ $(Fbind) #LabeledUpdate }+
+  = AExpInner {$ _ $(Fbind) #LabeledUpdate }+
+  / AExpInner
 
 AExpInner
   = { $(QVar) #Variable }
@@ -405,8 +443,10 @@ Stmt
 Fbind
   = { $(QVar) _ "=" _ $(Exp) #FBind }
 
+// Pattern Matching
+
 Pat
-  = { $(Lpat) _ $(Qconop) _ $(Pat) #InfixConstructor }
+  = { $(Lpat) _ $(QconOp) _ $(Pat) #InfixConstructor }
   / Lpat
 
 Lpat
@@ -433,6 +473,8 @@ GCon
   / { '[' _ ']' #ListConstruntor }
   / { '('_ ',' (_ ',')* _ ')' #TuppleConstructor }
   / QCon
+
+/* Variables, Constructors, Operators */
 
 Var
   = { VARID #Variable }
