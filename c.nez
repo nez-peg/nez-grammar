@@ -222,8 +222,10 @@ return a;
 
 // Declaration
 //==============
-TypeDef                    = { "typedef" _ $type(Type) ( _ $(TypeDefName) _ )? ( ',' _ $(TypeDefName) _ )* ";" #TypeDeclaration }
-TypeDefName                = { <on TypeName ( VarName / Name )> #Name }
+TypeDef                    = { "typedef" _ $type(Type) _ $(TypeDefName) _ ( ',' _ $(TypeDefName) _ )* ";" #TypeDeclaration }
+TypeDefName                = { "*" $name(TypeDefName) #PointerName } _
+                           / <symbol TypeName> _ {$name "[" $size(ConstantExpression)? "]" #ArrayName / "(" $param(FunctionParamList) ")" #TFunc }*
+TypeName                   = { NAME #Name }
 VariableDeclaration        = { $(AnnotationList) $type(Type) $(InitDecl) ( "," $(InitDecl) )* ATTRIBUTE? ";" #Declaration }
                            / { $(AnnotationList) $type(Type) ( "=" $expr(Initializer) )? ( "," $(InitDecl) )* ATTRIBUTE? ";" #Declaration }
 InitDecl                   = { $name(VarName) ( "=" $expr(Initializer) )? #VarDecl } _
@@ -236,6 +238,7 @@ addInitializerList         = ( $(Designation) / $(Initializer) )? ( "," ($(Desig
 Designation                = { $(Designator)+ "=" $(Initializer) #Designation }
 Designator                 = "[" ConstantExpression "]"
                            / "." Name _
+
 example TypeDef typedef unsigned char BYTE;
 example TypeDef '''
 typedef struct {
@@ -254,8 +257,8 @@ example VariableDeclaration int[] a={1,2,3};
 Type                       = { "const" _ $(TypeSuffix) #TConst } _
                            / { "volatile" _ $(TypeSuffix) #Volatile } _
                            / TypeSuffix
-TypeSuffix                 = PrimaryType {$ POINTER_QUALIFIER? "*" POINTER_QUALIFIER? #TPointer / "[" (NAME / DIGIT*) "]" #TPointer / addFuncType / _ "volatile" #Volatile / _ "const" #TConst }*
-addFuncType                = "(" _ ( "*" / '^' )+ _ ( $({ "const" #TConst }) _ )? ( <on TypeName $(Name)> / addFuncType )? ( _ "(" $(FunctionParamList) ")" )? _ ")" _ "(" $(FunctionParamList) ")" #TFunc
+TypeSuffix                 = PrimaryType {$ POINTER_QUALIFIER? "*" POINTER_QUALIFIER? #TPointer / "[" (NAME / DIGIT*) "]" #TArray / addFuncType / _ "volatile" #Volatile / _ "const" #TConst }*
+addFuncType                = "(" _ ( "*" / '^' )+ _ ( $({ "const" #TConst }) _ )? (addFuncType)? ( _ "(" $(FunctionParamList) ")" )? _ ")" _ "(" $(FunctionParamList) ")" #TFunc
 POINTER_QUALIFIER          = "const"
                            / "restrict"
                            / "volatile"
@@ -275,9 +278,8 @@ PrimaryType                = StructDeclaration
                            / { "_Bool" #TBoolean } _
                            / { "_Complex" #TComplex } _
                            / { "__builtin_va_list" #TName } _
-                           / { <is TypeName> #TTypedef } _
+                           / { $(<isa TypeName>) #TTypedef } _
                            / { "node_type_t" #TName } _
-                           / { NAME #Name } _
 StructDeclaration          = { "struct" _ $name(Name)? addStructMember? #TStruct }
                            / { "union" _ $name(Name)? addStructMember? #TUnion }
                            / { "enum" _ $name(Name)? ( "{" $(EnumeratorList) ","? "}" )? #TEnum }
@@ -399,7 +401,7 @@ case 0:
 case 1:
 	return true;
 default:
-	retrun false;
+	return false;
 }
 '''
 //Expression
