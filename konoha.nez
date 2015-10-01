@@ -2,12 +2,12 @@
  * Konoha Grammar
  *  Static script language designed by K. Kuramitsu
  *
- * [1] 
+ * [1]
  *
  * Authors:
  *   Kimio Kuramitsu (https://github.com/kkuramitsu/)
  */
- 
+
 File                               = _ { $(TopLevel)* #Source } _ EOF
 
 /* Code Layout (Whitespace) */
@@ -209,14 +209,14 @@ Declaration                        = ImportDeclaration
                                    / FunctionDeclaration
                                    / VariableDeclaration EOS
 
-// import                                   
+// import
 ImportDeclaration                  = { "import" $(PackageName) #Import } EOS
-PackageName                        = QualifiedName TODO {$ "." "*" #WildCardName }?
-                                   
+PackageName                        = QualifiedName {$ "." "*" #WildCardName }?
+
 // class
 ClassDeclaration                   = { $anno(Modifiers)? "class" $name(Identifier) $_(TypeParameters)? $super(SuperClass)? $impl(SuperInterfaces)? $body(ClassBody) #ClassDecl }
 SuperClass                         = "extends" ClassType
-SuperInterfaces                    = "implements" ClassTypes 
+SuperInterfaces                    = "implements" ClassTypes
 ClassBody                          = "{" { $(ClassBodyDeclaration)* #Block } "}"
 ClassBodyDeclaration               = ClassMemberDeclaration
                                    / TODO { $(Block) #InstanceInisializer }
@@ -279,14 +279,11 @@ enum C {
 '''
 
 //local variable
-VariableDeclaration                = { $anno(Modifiers)? $type(Type) $name(VarName) !"," ( "=" $expr(Initializer) )? !"," #VarDecl }
+VariableDeclaration                = { $anno(Modifiers)? $type(Type) $name(VarName) !"," ( "=" $expr(Expression) )? !"," #VarDecl }
                                    / { $anno(Modifiers)? $type(Type) $list(InitDeclList) #MultiVarDecl }
 InitDeclList                       = { $(InitDecl) ( "," $(InitDecl) )* #List }
-InitDecl                           = { $name(VarName) ( "=" $expr(Initializer) )? #VarDecl }
-VarName                            = Identifier {$name "[" $param(ConstantExpression)? "]" #ArrayDecl }*
-Initializer                        = Expression
-                                   / ArrayInitializer
-ArrayInitializer                   = { "{" ( $(Initializer) ( "," $(Initializer) )* )? ","? "}" #Array }
+InitDecl                           = { $name(VarName) ( "=" $expr(Expression) )? #VarDecl }
+VarName                            = Identifier {$name "[" $param(ConstantExpression)? "]" #ArrayName }*
 
 /* Variable Declraration */
 
@@ -298,14 +295,14 @@ example VariableDeclaration ~ed4370b '''
 int a = 1, b
 '''
 
-example VariableDeclaration ~641c96 '''
-int[] anArray = { 
+example VariableDeclaration ~b34575 '''
+int[] anArray = {
     1, 2,
     3, 4
 }
 '''
 
-example VariableDeclaration ~dc6ef6 '''
+example VariableDeclaration ~aaa2f9 '''
 String[][] names = {
   {"Mr. ", "Mrs. ", "Ms. "},
   {"Smith", "Jones"}
@@ -327,7 +324,7 @@ Throws                             = "throws" { $(ClassTypes) #Throws }
 
 //constructor
 ConstructorDeclaration             = { $anno(Modifiers)? $type(ReferenceType) "(" $param(ParamList) ")" $throws(Throws)? $body(ConstructorBody) #Constructor }
-ConstructorBody                    = "{" { $(ExplicitConstructorInvocation)? ( $(Statement) / $(LocalDeclaration) )* #Block } "}"
+ConstructorBody                    = "{" { $(ExplicitConstructorInvocation)? ( $(Statement) / $(Declaration) )* #Block } "}"
 ExplicitConstructorInvocation      = { $(TypeArguments)? $({ $(This) "(" _ArgumentExpressionList? ")" #List }) #ExplicitConstructorInvocation } EOS
                                    / { $(TypeArguments)? $({ $(Super) "(" _ArgumentExpressionList? ")" #List }) #ExplicitConstructorInvocation } EOS
                                    / { $(PostfixExpression) "." $(TypeArguments)? $(Super) $({ "(" _ArgumentExpressionList? ")" #List }) #ExplicitConstructorInvocation } EOS
@@ -335,6 +332,13 @@ ExplicitConstructorInvocation      = { $(TypeArguments)? $({ $(This) "(" _Argume
 //
 FunctionDeclaration                = { $anno(Modifiers)? "function" $name(Identifier) "(" $param(ParamList) ")" $type(":" TypeOrVoid)? $body(Block) #FuncDecl }
                                    / { $anno(Modifiers)? ( $(TypeParameters) $anno(Modifiers)? )? $type(TypeOrVoid) $name(Identifier) "(" $param(ParamList) ")" $throws(Throws)? ($body(Block) / EOS) #FuncDecl }
+
+// Lambda
+LambdaExpression                   = { "function" $name(Identifier)? "(" $param(ParamList) ")" $type(":" TypeOrVoid)? $body(Block) #Lambda }
+                                   / { $param(LambdaParameters) "->" $body(LambdaBody) #Lambda }
+LambdaParameters                   = Identifier / "(" ParamList ")"
+LambdaBody                         = !'{' Expression
+                                   / Block
 
 example FunctionDeclaration ~ae75e55 '''
 int fibo(int n) {
@@ -349,7 +353,6 @@ function fibo(n :int) :int {
 	return fibo(n-1)+fibo(n-2);
 }
 '''
-
 
 example FunctionDeclaration ~f59b67 '''
 function fibo(n) {
@@ -379,7 +382,7 @@ ReferenceType                      = ArrayType
                                    / ClassType
                                    / TypeVariable
 ArrayType                          = (PrimitiveType / ClassType / TypeVariable) {$base "[" "]" #ArrayType }+
- 
+
 ClassType                          = QualifiedName {$base $param(TypeArguments) #GenericType }?
 
 TypeVariable                       = { $anno(Modifiers) $(Identifier) #Annotated }
@@ -425,11 +428,11 @@ Map<K,V>[]
 
 // Block, Statement
 //===================
-EOS                                = ";" / [ \t]* EOL _
+EOS                                = ";" / &'}' / [ \t]* EOL _
 Block                              = "{" { ( $(Statement) / $(LocalDeclaration) )* #Block } "}"
 LocalDeclaration                   = VariableDeclaration EOS
                                    / ClassDeclaration
-                                   
+
 Statement                          = Block
                                    / { "assert" $cond(Expression) ( ":" $msg(Expression) )?  #Assert } EOS
                                    / { "if" "(" $cond(Expression) ")" $then(Statement) ( "else" $else(Statement) )? #If }
@@ -444,9 +447,9 @@ Statement                          = Block
                                    / { "return" $expr(Expression)? #Return } EOS
                                    / TryStatement
                                    / { "throw" $expr(Expression) #Throw } EOS
-                                   / TODO "synchronized" { "(" $cond(Expression) ")" $body(Block) #Synchronized }
-                                   / TODO { $label(Identifier) ":" #Label }
-                                   / { $(Expression) #Expression } EOS
+                                   / "synchronized" { "(" $cond(Expression) ")" $body(Block) #Synchronized }
+                                   / { $label(Identifier) ":" #Label }
+                                   / { $expr(Expression) #Expression } EOS
                                    / EOS+ { #Empty }
 
 example Block ~783b5 '''
@@ -454,19 +457,30 @@ example Block ~783b5 '''
 }
 '''
 
-example Block ~45544 '''
+example Block ~ff5ad2 '''
 {
 	a;
 }
 '''
 
-example Block ~ea9cad '''
+example Block ~ff5ad2 '''
+{
+	a // semicolon
+}
+'''
+
+example Block ~fd6abb '''
 {
 	a;
 	a;
 }
 '''
 
+example Block ~8dd2bc '''
+{
+  var n = 1;
+}
+'''
 
 example Statement ~ba89507 '''
 if(c) {
@@ -548,14 +562,14 @@ catch(e) {
 finally {
 }
 '''
-                                   
+
 // try/catch
 TryStatement                       = { "try" $try(Block) $catch(CatchBlock) ( "finally" $finally(Block) )? #Try }
 CatchBlock                         = { $(Catch)* #List }
 Catch                              = { "catch" "(" $anno(Modifiers)? _CatchParameter ")" $body(Block) #Catch }
 _CatchParameter                    = $type(ClassType) $name(Identifier) / $name(Identifier)
 
-                   
+
 // switch
 SwitchStatement                    = { "switch" "(" $cond(Expression) ")" $body(SwitchBlock) #Switch }
 SwitchBlock                        = "{" { ($(SwitchCondition) / $(Statement) / $(LocalDeclaration) )+ #Block } "}"
@@ -609,7 +623,7 @@ ExclusiveOrExpression              = AndExpression {$left "^" $right(AndExpressi
 AndExpression                      = EqualityExpression {$left "&" $right(EqualityExpression) #BitwiseAnd }*
 
 EqualityExpression                 = RelationalExpression {$left _EqualityOperator $right(RelationalExpression) }*
-_EqualityOperator                  = "==" #Equals 
+_EqualityOperator                  = "==" #Equals
                                    / "!=" #NotEquals
 
 RelationalExpression               = ShiftExpression {$left _RelationalOperator $right(ShiftExpression) }*
@@ -643,9 +657,10 @@ _Inc                               = "++" #Inc
 _Dec                               = "--" #Dec
 
 PrimaryExpression                  = Constant
+                                   / ScriptLiteral
+                                   / "(" Expression ")"
                                    / This
                                    / Super
-                                   / "(" Expression ")"
                                    / MethodInvocationExpression
                                    / InstanceCreationExpression
                                    / ArrayCreationExpression
@@ -655,7 +670,7 @@ Super                              = { "super" #Super `` }
 MethodInvocationExpression         = { $name(Identifier) $param(ArgumentExpressionList) #Apply }
 InstanceCreationExpression         = { "new" $type(ClassType) $param(ArgumentExpressionList) $body(ClassBody)? #New }
 ArrayCreationExpression            = { "new" $type(NonArrayType {$base "[" $size(Expression) "]" #ArrayType }+ {$ "[" "]" #ArrayType }*) #NewArray }
-                                   / { "new" $type(NonArrayType {$base "[" "]" #ArrayType }+) $(ArrayInitializer) #NewArray }
+                                   / { "new" $type(NonArrayType {$base "[" "]" #ArrayType }+) $(ArrayLiteral) #NewArray }
 
 example Expression ~46f038 x=y
 example Expression ~8e03b0 x+=y
@@ -700,14 +715,47 @@ example Expression ~f5f3c9 x.f(y).z
 example Expression ~089e532 this
 example Expression ~f88ac2a super
 
+/* ScriptLiteral */
+
+ScriptLiteral                      = ArrayLiteral
+                                   / ObjectLiteral
+                                   / RegularExpression
 
 
-// Lambda
-LambdaExpression                   = { $(LambdaParameters) "->" $(LambdaBody) #Lambda }
-LambdaParameters                   = { ($(Identifier) / $({ "(" _ArgumentExpressionList? ")" #AddArgumentExpressionList }) / "(" $(InferredFormalParameterList) ")") #LambdaParameters }
-InferredFormalParameterList        = { $(Identifier) ( "," $(Identifier) )* #InferredFormalParameterList }
-LambdaBody                         = Expression
-                                   / Block
+ArrayLiteral                       = { "[" ("," / $(Expression))* "]" #Array }
+
+ObjectLiteral                      = { "{" (($(PropertyAssignment) ("," $(PropertyAssignment))*) / ":")  "}" #Object }
+                                   / { "{" ("," / $(Expression))* "}" #Set }
+PropertyAssignment                 = { $key(PropertyName) ":" $value(Expression) #$ }
+PropertyName                       = StringLiteral
+                                   / CharacterLiteral
+                                   / Identifier
+
+TripleLiteral                      = '\'\'\'' { $(TripleContent)* #Interpolation } '\'\'\''
+TripleContent                      = '${' Expression '}'
+                                   / '$[' Expression ']'
+                                   / { (!'\'\'\'' !'${' !'$[' .)* #Text }
+
+example TripleLiteral&Expression ~6828079 ```
+'''Apple ${Computer} Inc.'''
+```
+
+/* Regular Expression */
+
+RegularExpression               = { '/' REGEX_BODY '/' REGEX_FLAGS #RegExp }
+REGEX_BODY                      = REGEX_FIRST_CHAR REGEX_CHAR*
+REGEX_FIRST_CHAR                = REGEX_BACKSLASH_SEQUENCE
+                                / ![*\\/\x5b] REGEX_NON_TERMINATOR
+                                / REGEX_CLASS
+REGEX_CHAR                      = '*'
+                                / REGEX_FIRST_CHAR
+REGEX_BACKSLASH_SEQUENCE        = '\\' REGEX_NON_TERMINATOR
+REGEX_NON_TERMINATOR            = !'\n' .
+REGEX_CLASS                     = '[' REGEX_CLASS_CHAR* ']'
+REGEX_CLASS_CHAR                = ![\x5d\\] REGEX_NON_TERMINATOR
+                                / REGEX_BACKSLASH_SEQUENCE
+REGEX_FLAGS                     = [gimsy]*
+
 
 /* Identifier */
 //Name
@@ -738,13 +786,14 @@ x.Apple.x
 Literal                            = FloatingPointLiteral
                                    / IntegerLiteral
                                    / BooleanLiteral
+                                   / TripleLiteral
                                    / CharacterLiteral
                                    / StringLiteral
                                    / NullLiteral
 Constant                           = Literal
-NullLiteral                        = { #Null } "null" 
-BooleanLiteral                     = { #True } "true" 
-                                   / { #False } "false" 
+NullLiteral                        = { #Null } "null"
+BooleanLiteral                     = { #True } "true"
+                                   / { #False } "false"
 IntegerLiteral                     = { (DECIMAL / HEXADECIMAL / BINARY / OCTAL) (INT_SUFFIX #Long / FLOAT_SUFFIX #Float / #Integer) } _
 DECIMAL                            = '0' ![bBxX0-9_]
                                    / [1-9] ( '_'* DIGIT )*
@@ -780,8 +829,8 @@ HEX4                               = HEX HEX HEX HEX
 
 /* Example */
 
-// The traditional "Hello, world!" program can be written in Java 
-example File ~fcbd985 '''
+// The traditional "Hello, world!" program can be written in Java
+example File ~5163c3f '''
 System.out.println("Hello World!"); // Prints the string to the console.
 '''
 
@@ -807,7 +856,7 @@ example Expression  ~4e2150 1+2-3*4%5
 
 /* Expression (local) */
 
-example Expression '''
+example Expression ~9b901ac '''
 () -> {
   System.out.println("example");
 }
@@ -817,11 +866,11 @@ example Expression '''
 
 example Expression ~a47e9fd '''
 x
-''' 
+'''
 
 example Expression  ~fdb051 '''
 Apple
-''' 
+'''
 
 /* Literal (standard) */
 
