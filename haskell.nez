@@ -69,16 +69,34 @@ GRAPHIC
 "module" = 'module' !GRAPHIC
 "newtype" = 'newtype' !GRAPHIC
 "of" = 'of' !GRAPHIC
-"then" 'then' !GRAPHIC
+"then" = 'then' !GRAPHIC
 "type" = 'type' !GRAPHIC
 "where" = 'where' !GRAPHIC
 "_" = '_' !GRAPHIC
 
+"ccall" = 'ccall' !GRAPHIC
+"stdcall" = 'stdcall' !GRAPHIC
+"cplusplus" = 'cplusplus' !GRAPHIC
+"jvm" = 'jvm' !GRAPHIC
+"dotnet" = 'dotnet' !GRAPHIC
+"export" = 'export' !GRAPHIC
+
 "-" = '-' !SYMBOL
+".." = '..' !SYMBOL
+"::" = '::' !SYMBOL
+":" = ':' !SYMBOL
+"=>" = '=>' !SYMBOL
+"=" = '=' !SYMBOL
+"\\" = '\\' !SYMBOL
+"|" = '|' !SYMBOL
+"<-" = '<-' !SYMBOL
+"->" = '->' !SYMBOL
+"@" = '@' !SYMBOL
+"~" = '~' !SYMBOL
 
 SMALL = [a-z_]
 LARGE = [A-Z]
-SYMBOL = [!#$%&*+./<=>?@\\^|-~:]
+SYMBOL = [!#$%&*+./<=>?@\\^|~:-]
 DIGIT = [0-9]
 OCTIT = [0-7]
 HEXIT = DIGIT / [A-Fa-f]
@@ -88,7 +106,7 @@ RESERVEDID
   = "case" / "class" / "data" / "default" / "deriving" / "do" / "else" / "foreign"
   / "if" / "import" / "infixl" / "infixr" / "infix" / "instance" / "in" / "let"
   / "module" / "newtype" / "of" / "then" / "type" / "where" / "_"
-VARSYM = (!':' SYMBOL) (!(RESERVEDOP / DASHES) SYMBOL)*
+VARSYM = (!(RESERVEDOP / DASHES) ( (!':' SYMBOL) SYMBOL* ))
 CONSYM = (!RESERVEDOP ':' (SYMBOL)*)
 RESERVEDOP
   = ".." / "::" / ":" / "=>" / "=" / "\\" / "|" / "<-" / "->" / "@" / "~"
@@ -176,7 +194,7 @@ Exports
 
 Export
   = { $(QVar) #Export }
-  / { $(Qtycon) _ '(' _ ('..' / $(Cname) (_ ',' _ $(Cname))* _ )? ')' #Export }
+  / { $(QTycon) _ '(' _ ('..' / $(Cname) (_ ',' _ $(Cname))* _ )? ')' #Export }
   / { $(Qtycls) _ '(' _ ('..' / $(QVar) (_ ',' _ $(QVar))* _ )? ')' #Export }
   / { "module" __ $(ModId) #Export }
 
@@ -201,9 +219,9 @@ Cname
 TopDecl
   = { "type" _ $(SimpleType) _ "=" _ $(Type) #TypeSynonym }
   / { "data" (_ $(Context) _ "=>")? _ $(SimpleType) (_ "=" _ $(Constrs))? (_ $(Deriving))? #DataTypeDecl }
-  / { "newtype" (_ $(Context) _ "=>")? _ $(SimpleType) _ "=" _ $(NewConstrs) (_ $(Deriving))? #NewtypeDecl }
-  / { "class" (_ $(SContext) _ "=>")? _ $(Tycls) _ $(Tyvar) ( _ "where" _ $(Cdecls))? #Class }
-  / { "instance" (_ $(SContext) _ "=>")? _ $(Qtycls) _ $(Inst) ( _ "where" _ $(Idecls))? #Instance }
+  / { "newtype" (_ $(Context) _ "=>")? _ $(SimpleType) _ "=" _ $(NewConstr) (_ $(Deriving))? #NewtypeDecl }
+  / { "class" (_ $(SContext) _ "=>")? _ $(Tycls) _ $(Tyvar) ( __ "where" __ $(CDecls))? #Class }
+  / { "instance" (_ $(SContext) _ "=>")? _ $(Qtycls) _ $(Inst) ( __ "where" __ $(IDecls))? #Instance }
   / { "default" _ '(' _ ($(Type) (_ ',' _ $(Type))* )? _ ')' #Default }
   / { "foreign" _ $(FDecl) #Foreign }
   / Decl
@@ -245,10 +263,10 @@ Fixity
 // Types
 
 Type
-  = { $(BType) _ "->" _ $(Type) #FunctionType }
+  = { $(BType) _ ("->" _ $(Type))? #FunctionType }
 
 BType
-  = AType {$ $(AType) #TypeApplication }*
+  = AType {$ $(AType) #TypeApplication }?
 
 AType
   = GTycon
@@ -291,15 +309,15 @@ SimpleType
   = { $(Tycon) (_ $(Tyvar))* #Type }
 
 Constrs
-  = { $(Constr) ("|" _ $(Constr))* #Constructors }
+  = { $(Constr) ( _ "|" _ $(Constr))* #Constructors }
 
 Constr
-  = { $(Con) $({( _ $({ ("!" _ #StrictParam / #Param) $(AType) }))* #Parameters }) #Constructor }
-  / { ($(Btype) / "!" _ $(atype)) _ $(ConOp) _ ($(Btype) / "!" _ $(atype)) #InfixTypeConstructor }
-  / { $(con) (_ $(FieldDecl))* #Constructor }
+  = { ($(BType) / "!" _ $(AType)) _ $(ConOp) _ ($(BType) / "!" _ $(AType)) #InfixTypeConstructor }
+  / { $(Con) _ '{' _ ($(FieldDecl) (_ ',' _ $(FieldDecl))*)? _ '}' #Constructor }
+  / { $(Con) $({( _ $({ ("!" _ #StrictParam / #Param) $(AType) }))* #Parameters }) #Constructor }
 
 FieldDecl
-  = { $(Vars) _ "::" _ ($(Type) / "!"  _ $(AType)) #FieldDecl }
+  = { $(Vars) _ "::" _ ($(Type) / "!" _ $(AType)) #FieldDecl }
 
 Deriving
   = { "deriving" (_ $(DClass))* #Deriving }
@@ -343,29 +361,29 @@ Safety
 // Foreign Types
 
 FType
-  = { $(FRType) #FType }
-  / { $(FAType) _ $(FType) #FType }
+  = { $(FAType) _ "->" _ $(FType) #FType }
+  / { $(FRType) #FType }
 
 FRType
   = { $(FAType) #FRType }
   / { '(' _ ')' #FRType }
 
 FAType
-  = { $(Qtycon) (_ $(AType))* #FAType }
+  = { $(QTycon) (_ $(AType))* #FAType }
 
 // Function and Pattern Bindings
 
 Funlhs
-  = { $(Var) _ $(Apat) (_ $(Apat))? #Funlhs }
+  = { $(Var) _ $(Apat) (_ $(Apat))* #Funlhs }
   / { $(Pat) _ $(VarOp) _ $(Pat) #Funlhs }
   / { '(' _ $(Funlhs) _ ')' _ $(Apat) (_ $(Apat))* #Funlhs }
 
 Rhs
-  = { "=" _ $(Exp) (_ "where" _ $(Decls))? #Rhs }
-  / { $(Gdrhs) (_ "where" _ $(Decls))? #Rhs }
+  = { "=" _ $(Exp) (__ "where" __ $(Decls))? #Rhs }
+  / { $(Gdrhs) (__ "where" __ $(Decls))? #Rhs }
 
 Gdrhs
-  = { $(Guards) _ "=" _ $(Exp) (_ $(Gdrhs))? #Gdrhs }
+  = { $(Guards) _ "=" _ $(Exp) (__ $(Gdrhs))? #Gdrhs }
 
 Guards
   = { "|" (_ $(Guard))+ #Guards }
@@ -379,7 +397,7 @@ Guard
 
 Exp
   = { $(InfixExp) _ "::" (_ $(Context) _ "=>")? $(Type) #ExpressionTyoeSignature }
-  / { $(InfixExp) #Exp }
+  / InfixExp
 
 /* Operator Applications */
 /* FIXME:priority */
@@ -391,9 +409,9 @@ InfixExp
 
 LExp
   = { "\\" (_ $(Apat))+ _ "->" _ $(Exp) #LamdaAbstraction }
-  / { "let" _ $(Decls) _ "in" _ $(Exp) #LetExpression }
+  / { "let" _ $(Decls) _ "in" __ $(Exp) #LetExpression }
   / { "if" _ $(Exp) (_ ";")? _ "then" _ $(Exp) (_ ";")? _ "else" _ $(Exp) #Conditional }
-  / { "case"_ $(Exp) _ "of" _ $(Alts) #CaseExpression }
+  / { "case"_ $(Exp) _ "of" __ $(Alts) #CaseExpression }
   / { "do" _ $(Stmts) #DoExpression }
   / FExp
 
@@ -401,7 +419,7 @@ FExp
   = AExp {$ _ $(AExp) #FunctionApply }*
 
 AExp
-  = AExpInner {$ _ $(Fbind) #LabeledUpdate }+
+  = AExpInner {$ _ '{' _ $(Fbind) (_ ',' _ $(Fbind))* _ '}' #LabeledUpdate }+
   / AExpInner
 
 AExpInner
@@ -409,13 +427,13 @@ AExpInner
   / { $(GCon) #GeneralConstructor }
   / { $(Literal) #Literal }
   / { '(' _ $(Exp) _ ')' #Expression }
-  / { '(' _ $(Exp) (_ ',' $(Exp))+ _ ')' #Tupple }
+  / { '(' _ $(Exp) (_ ',' _ $(Exp))+ _ ')' #Tupple }
   / { '[' _ $(Exp) (_ ',' _ $(Exp))* _ ']' #List }
   / { '[' _ $(Exp) (_ ',' _ $(Exp))? _ ".." (_ $(Exp))? _ ']' #ArithmeticSuquence }
   / { '[' _ $(Exp) _ "|" _ $(Qual) (_ ',' _ $(Qual))* _ ']' #ListComprehension }
   / { '(' _ $(InfixExp) _ $(QOp) _ ')' #LeftSection }
   / { '(' _ (!"-" $(QOp)) _ $(InfixExp) _ ')' #RightSection }
-  / { $(QCon) (_ $(Fbind))* #LabeledConstruction }
+  / { $(QCon) (_ '{' ($(Fbind) (_ ',' _ $(Fbind))*)? _ '}') #LabeledConstruction }
 
 Qual
   = { $(Pat) _ "<-" _ $(Exp) #Generator }
@@ -426,19 +444,19 @@ Alts
   = {$(Alt) (__ $(Alt))* #Alts }
 
 Alt
-  = { $(Pat) _ "->" _ $(Exp) (_ "where" _ $(Decls))? #Alt }
-  / { $(Pat) _ $(Gdpat) (_ "where" _ $(Decls))? #Alt }
+  = { $(Pat) _ "->" _ $(Exp) (__ "where" __ $(Decls))? #Alt }
+  / { $(Pat) _ $(Gdpat) (__ "where" __ $(Decls))? #Alt }
 
 Gdpat
-  = { $(Guards) _ "->" _ $(Exp) (_ $(Gdpat))? #Gdpat }
+  = { $(Guards) _ "->" _ $(Exp) (__ $(Gdpat))? #Gdpat }
 
 Stmts
   = { $(Stmt) (__ $(Stmt))* __ exp #Stmts }
 
 Stmt
-  = { $(Exp) #Stmt }
-  / { $(Pat) _ "<-" _ $(Exp) #Stmt }
+  = { $(Pat) _ "<-" _ $(Exp) #Stmt }
   / { "let" _ $(Decls) #LocalDeclaration }
+  / { $(Exp) #Stmt }
 
 Fbind
   = { $(QVar) _ "=" _ $(Exp) #FBind }
@@ -446,7 +464,7 @@ Fbind
 // Pattern Matching
 
 Pat
-  = { $(Lpat) _ $(QconOp) _ $(Pat) #InfixConstructor }
+  = { $(Lpat) _ $(QConOp) _ $(Pat) #InfixConstructor }
   / Lpat
 
 Lpat
@@ -457,7 +475,7 @@ Lpat
 Apat
   = { $(Var) (_ "@" _ $(Apat))? #AsPattern }
   / GCon
-  / { $(QCon) (_ $(Fpat) (_ ',' _ $(Fpat))*)? #LabeledPattern }
+  / { $(QCon) _ '{' (_ $(Fpat) (_ ',' _ $(Fpat))*)? _ '}' #LabeledPattern }
   / Literal
   / { "_" #Wildcard }
   / '(' _ Pat _ ')'
@@ -477,11 +495,11 @@ GCon
 /* Variables, Constructors, Operators */
 
 Var
-  = { VARID #Variable }
+  = { !RESERVEDID VARID #Variable }
   / { '(' _ VARSYM _ ')' #Variable }
 
 QVar
-  = { QVARID #QualifiedVariable }
+  = { !RESERVEDID QVARID #QualifiedVariable }
   / { '(' _ QVARSYM _ ')' #QualifiedVariable }
 
 Con
@@ -493,11 +511,11 @@ QCon
   / { '(' _ GCONSYM _ ')' #QualifiedConstructor }
 
 VarOp
-  = { VARSYM #VariableOperator }
+  = { !RESERVEDOP VARSYM #VariableOperator }
   / { '`' _ VARID _ '`' #VariableOperator }
 
 QVarOp
-  = { QVARSYM #QualifiedVariableOperator }
+  = { !RESERVEDOP QVARSYM #QualifiedVariableOperator }
   / { '`' _ QVARID _ '`' #QualifiedVariableOperator }
 
 ConOp
@@ -527,14 +545,95 @@ example Literal 12.3
 example Literal 12.3e+4
 example Literal 'a'
 example Literal "abc"
+example Literal "Hello, world!\n"
 
 /* Identifier (standard) */
 example Exp x
 example Exp Apple
+example Exp ()
+example Exp (123, 'a')
+example Exp [1, 2, 3]
+example Exp [ x |  xs   <- [ [(1,2),(3,4)], [(5,4),(3,2)] ], (3,x) <- xs ]
 
 /* Expression (standard) */
 example Exp 1+2*3
-example Exp x = x + 1
 example Exp f x + g y
 example Exp - f x + y
 example Exp f x y :: Int
+example Exp do print $ fmap f (Just 5)
+example Exp Person {name = "eiel", age = 30}
+example Exp '''
+let xs = e in
+  case xs of (x:rest) -> if x==0 then rest else xs
+'''
+
+/* Declaration */
+example Type Num
+example Type '''
+[Int] -> Int
+'''
+
+example TopDecls '''
+type String = [Char]
+'''
+
+example TopDecls '''
+data Person = Person { name :: String, age :: Int } deriving Show
+'''
+
+example TopDecls '''
+data Point = Pt2D Double Double | Pt3D Double Double Double deriving (Eq, Show)
+'''
+
+example TopDecls '''
+newtype DigitString = DigitStr String
+'''
+
+example TopDecls '''
+class Foo a where
+    op :: Num b => a -> b -> a
+'''
+
+example TopDecls '''
+instance Show (a -> b) where
+      show fn = "<<function>>"
+'''
+
+example TopDecls infixr 7 `op`
+
+example TopDecls x = x + 1
+example TopDecls add x y = x + y
+example Decls '''
+factA 0 = 1
+factA n = n * factA (n-1)
+'''
+
+example Decls '''
+factB n | n==0      = 1
+        | otherwise = n * factB (n-1)
+'''
+
+example Decls '''
+factD n = case n of 0 -> 1
+          0 -> 1
+          _  | n < 0     -> error "fact out of range"
+             | otherwise -> n * factD (n - 1)
+'''
+
+example Decls '''
+trim str@(c:cs) | c == '0'  = trim cs
+                | otherwise = str
+'''
+
+example Decls '''
+op :: Num b => a -> b -> a
+'''
+
+/* FFI */
+example TopDecls '''
+foreign import ccall "math.h sin" c_sin :: Double -> Double
+'''
+
+example TopDecls '''
+foreign export ccall "addInt"   (+) :: Int   -> Int   -> Int
+'''
