@@ -156,6 +156,8 @@ KEYWORD                    = 'auto'
 "const"                    = 'const' !W _
 "restrict"                 = 'restrict' !W _
 "volatile"                 = 'volatile' !W _
+"_Atomic"                  = '_Atomic' !W _
+
 "__declspec"               = '__declspec' !W _
 "__inline"                 = '__inline' !W _
 "__signed"                 = '__signed' !W _
@@ -199,31 +201,39 @@ FunctionParamList          = { ( $(FunctionParam) ( "," $(FunctionParam) )* )? (
                            / { _ 'void' _ #List }
 FunctionParam              = { $(Type) _ $(VarName)? #Param } _
 
-example Directive #include<stdio.h>
-example ExternBlock extern "C" {void add();}
-example FunctionDeclaration '''
+example Directive ~8fc4d0 #include<stdio.h> 
+example ExternBlock ~9efea3 extern "C" {void add();}
+example FunctionDeclaration ~22dd3c '''
 int main(){
 }
 '''
-example FunctionDeclaration '''
+example FunctionDeclaration ~12710e '''
 static int main(){
 }
 '''
-example FunctionDeclaration '''
+example FunctionDeclaration ~1195e4 '''
 int add(int a, int b){
 }
 '''
-example FunctionDeclaration '''
+example FunctionDeclaration ~2def48 '''
 int main(){
 int a = add(b,c);
 return a;
 }
 '''
+example FunctionDeclaration ~a04c1e '''
+int fibo(int n) {
+	if(n < 3) return 1;
+	return fibo(n-1)+fibo(n-2);
+}
+'''
 
 // Declaration
 //==============
-TypeDef                    = { "typedef" _ $type(Type) ( _ $(TypeDefName) _ )? ( ',' _ $(TypeDefName) _ )* ";" #TypeDeclaration }
-TypeDefName                = { <on TypeName ( VarName / Name )> #Name }
+TypeDef                    = { "typedef" _ $type(Type) _ $(TypeDefName) _ ( ',' _ $(TypeDefName) _ )* ";" #TypeDeclaration }
+TypeDefName                = { "*" $name(TypeDefName) #PointerName } _
+                           / <symbol TypeName> _ {$name "[" $size(ConstantExpression)? "]" #ArrayName / "(" $param(FunctionParamList) ")" #TFunc }*
+TypeName                   = { NAME #Name }
 VariableDeclaration        = { $(AnnotationList) $type(Type) $(InitDecl) ( "," $(InitDecl) )* ATTRIBUTE? ";" #Declaration }
                            / { $(AnnotationList) $type(Type) ( "=" $expr(Initializer) )? ( "," $(InitDecl) )* ATTRIBUTE? ";" #Declaration }
 InitDecl                   = { $name(VarName) ( "=" $expr(Initializer) )? #VarDecl } _
@@ -231,31 +241,39 @@ InitDeclAssign             = { $name(VarName) "=" $expr(Initializer) #VarDecl } 
 VarName                    = { "*" $name(VarName) #PointerName } _
                            / Name {$name "[" $size(ConstantExpression)? "]" #ArrayName / "(" $param(FunctionParamList) ")" #TFunc }*
 Initializer                = AssignmentExpression
-                           / "{" { addInitializerList* ","? #Initializer } "}"
-addInitializerList         = ( $(Designation) / $(Initializer) )? ( "," ($(Designation) / $(Initializer)) )*
-Designation                = { $(Designator)+ "=" $(Initializer) #Designation }
-Designator                 = "[" ConstantExpression "]"
-                           / "." Name _
-example TypeDef typedef unsigned char BYTE;
-example TypeDef '''
+                           / ArrayInitializer
+ArrayInitializer           = "{" { ( $(Initializer) ( "," $(Initializer) )* )? ","? #Array } "}"
+
+example TypeDef ~5fc3cf typedef unsigned char BYTE;
+example TypeDef ~927c50 '''
 typedef struct {
 int no;
 char name[20];
 } PERSON;
 '''
-example VariableDeclaration int a;
-example VariableDeclaration int a,*b,c;
-example VariableDeclaration int a=0;
-example VariableDeclaration int a=0,b=1,c=2;
-example VariableDeclaration int[] a={1,2,3};
+example VariableDeclaration ~0cf1e0 int a;
+example VariableDeclaration ~83437a int a,*b,c;
+example VariableDeclaration ~ef2263 int a=0;
+example VariableDeclaration ~4bd8c5 int a=0,b=1,c=2;
+example VariableDeclaration ~2bdd12 int * restrict array;
+example VariableDeclaration ~cfaf2c int[] a={1,2,3};
+example VariableDeclaration ~df76ed int x __attribute__ ((aligned (16)));
+example VariableDeclaration ~01fa16 '''
+int[][] id = {
+{1,2,3},
+{4,5,6}
+};
+'''
 
 //Type
 //====
-Type                       = { "const" _ $(TypeSuffix) #TConst } _
-                           / { "volatile" _ $(TypeSuffix) #Volatile } _
+Type                       = { _TypeQualifier $(TypeSuffix) } _
                            / TypeSuffix
-TypeSuffix                 = PrimaryType {$ POINTER_QUALIFIER? "*" POINTER_QUALIFIER? #TPointer / "[" (NAME / DIGIT*) "]" #TPointer / addFuncType / _ "volatile" #Volatile / _ "const" #TConst }*
-addFuncType                = "(" _ ( "*" / '^' )+ _ ( $({ "const" #TConst }) _ )? ( <on TypeName $(Name)> / addFuncType )? ( _ "(" $(FunctionParamList) ")" )? _ ")" _ "(" $(FunctionParamList) ")" #TFunc
+_TypeQualifier             = "const" #TConst
+                           / "volatile" #TVolatile
+                           / "restrict" #TRestrict
+                           / "_Atomic" #TAtomic
+TypeSuffix                 = PrimaryType {$ POINTER_QUALIFIER? "*" POINTER_QUALIFIER? #TPointer / "[" (NAME / DIGIT*) "]" #TArray / _ _TypeQualifier }*
 POINTER_QUALIFIER          = "const"
                            / "restrict"
                            / "volatile"
@@ -275,16 +293,15 @@ PrimaryType                = StructDeclaration
                            / { "_Bool" #TBoolean } _
                            / { "_Complex" #TComplex } _
                            / { "__builtin_va_list" #TName } _
-                           / { <is TypeName> #TTypedef } _
                            / { "node_type_t" #TName } _
-                           / { NAME #Name } _
-StructDeclaration          = { "struct" _ $name(Name)? addStructMember? #TStruct }
-                           / { "union" _ $name(Name)? addStructMember? #TUnion }
+                           / { $(<isa TypeName>) #TTypedef } _
+StructDeclaration          = { "struct" _ $name(Name)? _StructMember? #TStruct }
+                           / { "union" _ $name(Name)? _StructMember? #TUnion }
                            / { "enum" _ $name(Name)? ( "{" $(EnumeratorList) ","? "}" )? #TEnum }
 SIGN                       = ("signed" / "unsigned" / "__signed") _
 CONST                      = "const" _
 NAME_T                     = !DIGIT ( !( '_t' !W ) W )+ '_t' !W
-addStructMember            = '{' _ ( $(Directive) / $(StructMemberDeclaration) / _ )* _ "}"
+_StructMember              = '{' _ ( $(Directive) / $(StructMemberDeclaration) / _ )* _ "}"
 StructMemberDeclaration    = { $(AnnotationList) $type(Type) $(StructMemberName) ( "," $(StructMemberName) )* ";" _ #StructMemberDeclaration }
                            / { $type(Type) ";" _ #StructMemberDeclaration }
 StructMemberName           = VarName {$name ":" $value(ConstantExpression) #Bit }*
@@ -292,27 +309,31 @@ StructMemberName           = VarName {$name ":" $value(ConstantExpression) #Bit 
 EnumeratorList             = { $(Enumerator) ( "," $(Enumerator) )* ","? #List }
 Enumerator                 = Name {$name "=" $value(ConstantExpression) }?
 
-example Type int
-example Type unsigned int
-example Type int[]
-example Type int[][]
-example Type '''
+example Type ~5b21d7 int
+example Type ~5a9005 const char
+example Type ~1134c8 unsigned int
+example Type ~c2a231 unsigned const int
+example Type ~a5944d int[]
+example Type ~6cf979 int[][]
+example Type ~c2d905 '''
 struct Person{
 int id;
 char* name[20];
 int age;
 }
 '''
-example Type '''
+example Type ~87c2a8 '''
 enum Kitty { MIMI , YUKI = 5 , RENA } cats;
 '''
-example Type '''
+example Type ~bcacc5 '''
 union mydata {
 int i;
 double d;
 char *s;
 };
 '''
+example StructDeclaration ~78c38d struct s{} 
+
 
 // Block, Statement
 //===================
@@ -334,58 +355,61 @@ Statement                  = Block
                            / TypeDef
                            / { $expr(Expression) ";" #ExpressionStatement }
                            / { #Empty } ";"
-example Block '''
+example Block ~8909e9 '''
 {
 }
 '''
-example Block '''
+example Block ~0038ad '''
 {
 a;
 }
 '''
-example Block '''
+example Block ~6bba1c '''
 {
 a;
 a;
 }
 '''
-example Statement '''
+example Statement ~1591a2 '''
 if(c){
 }
 '''
-example Statement '''
+example Statement ~fda420 '''
 if(c){
 }
 else{
 }
 '''
-example Statement '''
+example Statement ~b8c2e3 '''
 while(c){
 }
 '''
-example Statement '''
+example Statement ~4bf45a '''
 do{
 }
 while(c);
 '''
-example Statement '''
+example Statement ~d46e74 '''
 for(;;){
 }
 '''
-example Statement '''
+example Statement ~c350a2 '''
 for(int i = 0;i<1;i++){
 }
 '''
-example Statement '''
+example Statement ~41aac4 '''
 goto label;
 '''
-example Statement '''
+example Statement ~d309c9 '''
 return;
 '''
-example Statement '''
+example Statement ~f26d52 '''
+return 0;
+'''
+example Statement ~03222e '''
 continue;
 '''
-example Statement '''
+example Statement ~084dd2 '''
 switch(c) {
 case 0:
 	return false;
@@ -393,21 +417,22 @@ case 1:
 	return true;
 }
 '''
-example Statement '''
+example Statement ~378d31 '''
 switch(c) {
 case 0:
 case 1:
 	return true;
 default:
-	retrun false;
+	return false;
 }
 '''
+
 //Expression
 //==========
 Expression                 = AssignmentExpression {$ "," $(AssignmentExpression) #Expression }*
-AssignmentExpression       = { $left(UnaryExpression) addAssignmentOperator $right(AssignmentExpression) }
+AssignmentExpression       = { $left(UnaryExpression) _AssignmentOperator $right(AssignmentExpression) }
                            / ConditionalExpression
-addAssignmentOperator      = "=" #Assign
+_AssignmentOperator        = "=" #Assign
                            / "*=" #AssignMul
                            / "/=" #AssignDiv
                            / "%=" #AssignMod
@@ -442,55 +467,75 @@ UnaryExpression            = PostfixExpression
                            / { "sizeof" ($expr(UnaryExpression) / "(" $type(Type) ")") #SizeOf }
 CastExpression             = { "(" $type(Type) ")" $expr(CastExpression) #Cast }
                            / UnaryExpression
-PostfixExpression          = (PrimaryExpression / { "(" $(Type) ")" "{" $({ addInitializerList* ","? #Initializer }) "}" }) {$ addFunctionCall / addPointerField / addIndex / addField / addInc / addDec }*
-addFunctionCall            = $({ "(" addArgumentExpressionList? ")" #List }) #Apply
-addArgumentExpressionList  = ($(AssignmentExpression) / $(Type)) ( "," ($(TypeP) / $(AssignmentExpression) / $(Type)) )*
+PostfixExpression          = PrimaryExpression {$recv _FunctionCall / _PointerField / _Index / _Field / _Inc / _Dec }*
+_FunctionCall              = $({ "(" _ArgumentExpressionList? ")" #List }) #Apply
+_ArgumentExpressionList    = ($(AssignmentExpression) / $(Type)) ( "," ($(TypeP) / $(AssignmentExpression) / $(Type)) )*
+_Index                     = "[" $(Expression) "]" #Index
+_Field                     = "." $(Name) #Field
+_PointerField              = "->" $(Name) #PointerField
+_Inc                       = "++" #Inc
+_Dec                       = "--" #Dec
 TypeP                      = Name {$ "*" #TPointer }+ &( _ (")" / ",") )
-addIndex                   = "[" $(Expression) "]" #Index
-addField                   = "." $(Name) #Field
-addPointerField            = "->" $(Name) #PointerField
-addInc                     = "++" #Inc
-addDec                     = "--" #Dec
 PrimaryExpression          = Constant
                            / CString
                            / "(" Expression ")"
                            / Name
 
-example Expression x=y
-example Expression x+=y
-example Expression x->y
+example Expression ~46f038 x=y
+example Expression ~8e03b0 x+=y
+example Expression ~548f79 x->y
 
-example Expression c?x:y
-example Expression x<<y
-example Expression x>>y
-example Expression x|y
-example Expression x&y
-example Expression x^y
-example Expression ~x
-example Expression x&&y
-example Expression x||y
-example Expression !x
+example Expression ~4e09fb c?x:y
+example Expression ~7ac13c x<<y
+example Expression ~9b2696 x>>y
+example Expression ~dea67f x|y
+example Expression ~7f3ecc x&y
+example Expression ~78b953 x^y
+example Expression ~f21916 ~x
+example Expression ~006e0a x&&y
+example Expression ~b60455 x||y
+example Expression ~51b2b2 !x
 
-example Expression x==y
-example Expression x!=y
-example Expression x<y
-example Expression x<=y
+example Expression ~b0be29 x==y
+example Expression ~f89dae x!=y
+example Expression ~ad9f44 x<y
+example Expression ~37ebeb x<=y
 
-example Expression x+y
-example Expression x*y
+example Expression ~ae662a x+y
+example Expression ~fa8a6a x*y
 
-example Expression ++x
-example Expression x++
+example Expression ~b89235 ++x
+example Expression ~5f409e x++
 
-example Expression x.f
-example Expression x.f(y)
-example Expression x[y]
-example Expression x.f.z
-example Expression x.f(y).z
+example Expression ~8a240d x.f
+example Expression ~af11e0 x.f(y)
+example Expression ~31a0c5 x[y]
+example Expression ~20a347 x.f.z
+example Expression ~792d40 x.f(y).z
 
-example Expression "a"
-example Expression (int) x
-example Expression (int *)malloc(sizeof(int) * 100)
+example Expression ~3ef58d func()
+example Expression ~c63a4d func(a,b)
+example Expression ~cd52e0 \uAAAA
+
+example Expression ~942075 (int) x
+example Expression ~9e6de4 (int *)malloc(sizeof(int) * 100)
+
+example Expression ~fc3b31 "a"
+example Expression ~9951c9 "a" "b" "c"
+example Expression ~ababc4 'a'
+example Expression ~46dcf5 0123u
+example Expression ~de692c 0xAA
+example Expression ~4ffadc 0xAA.BB
+example Expression ~6653cd 0xAAp10
+example Expression ~1adad1 0x186A0UL
+example Expression ~3b3014 3.14e3
+
+example Expression ~81f9f2 "\\x0a"
+example Expression ~9f41ae "\\n"
+example Expression ~3f5524 "\\0"
+
+
+
 
 //Literal
 //=======
@@ -519,7 +564,8 @@ INT_SUFFIX                 = [uU] LONG_SUFFIX?
 LONG_SUFFIX                = 'll'
                            / 'LL'
                            / [lL]
-CString                    = 'L'? ( '"' { STRING_CONTENT* #String } '"' _ )+
+CString                    = 'L'? ({ $(String) (_ $(String))+ #CString } / String) _
+String                     = '"' { STRING_CONTENT* #String } '"' _
 CChar                      = 'L'? "'" { CHAR_CONTENT* #Character } "'" _
 STRING_CONTENT             = ESCAPE
                            / &'\\\n' . . / ![\"\n\\] .
