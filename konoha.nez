@@ -609,7 +609,7 @@ _AssignmentOperator                = "=" #Assign
                                    / "+=" #AssignAdd
                                    / "-=" #AssignSub
                                    / "<<=" #AssignLeftShift
-                                   / ">>=" #AssignArithmeticRightShift
+                                   / ">>=" #AssignRightShift
                                    / ">>>=" #AssignLogicalRightShift
                                    / "&=" #AssignBitwiseAnd
                                    / "^=" #AssignBitwiseXOr
@@ -633,7 +633,7 @@ _RelationalOperator                 = "<=" #LessThanEquals
                                    / ">" #GreaterThan
                                    / "instanceof" #InstanceOf
 
-ShiftExpression                    = AdditiveExpression {$left ("<<" #LeftShift / ">>" #ArithmeticRightShift / ">>>" #LogicalRightShift) $right(AdditiveExpression) }*
+ShiftExpression                    = AdditiveExpression {$left ("<<" #LeftShift / ">>" #RightShift / ">>>" #LogicalRightShift) $right(AdditiveExpression) }*
 AdditiveExpression                 = MultiplicativeExpression {$left ("+" #Add / "-" #Sub) $right(MultiplicativeExpression) }*
 MultiplicativeExpression           = CastNewExpression {$left ("*" #Mul / "/" #Div / "%" #Mod) $right(CastNewExpression) }*
 CastNewExpression                  = { "(" $type(Type) ")" $expr(CastNewExpression) #Cast }
@@ -651,7 +651,7 @@ PostfixExpression                  = PrimaryExpression {$recv _MethodCall / _Ind
 _MethodCall                        = "." $(TypeArguments)? $name(Identifier) $param(ArgumentExpressionList) #MethodApply
 ArgumentExpressionList             = { "(" _ArgumentExpressionList? ")" #List }
 _ArgumentExpressionList           = $(Expression) ( "," $(Expression) )*
-_Index                             = "[" $param(Expression) "]" #Index
+_Index                             = "[" $param({ $(Expression) #List}) "]" #Indexer
 _Field                             = "." $name(Identifier) !'(' #Field
 _Inc                               = "++" #Inc
 _Dec                               = "--" #Dec
