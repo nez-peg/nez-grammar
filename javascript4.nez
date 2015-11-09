@@ -1,5 +1,5 @@
 /**
- * JavaScript 4.0 (ECMA262) 
+ * JavaScript 4.0 (ECMA262)
  *
  *  Based on grammar from ECMA-262[1] and javascript.pegjs[2]
  *
@@ -12,8 +12,6 @@
  *   Kensuke Tamura (https://github.com/kensuketamura)
  *   Kimio Kuramitsu (https://github.com/kkuramitsu)
  */
-
-/* Start Point */
 File                            = { ( __ $(SourceElement) )* __ #Source }
 
 /* Code Layout : Line-sensitive */
@@ -155,12 +153,13 @@ KEYWORD                         = "break"
 SourceElement                   = Statement
 
 /* FIXME   / FunctionDeclaration */
-FunctionDeclaration             = { "function" __ $name(Identifier) __ $params(FunctionParameterList) __ $body(FunctionBody) #FuncDecl }
-FunctionExpression              = { "function" __ ( $name(Identifier) __ )? $params(FunctionParameterList) __ $body(FunctionBody) #FuncDecl }
-FunctionParameterList           = '(' __ { ( $(Identifier) ( __ ',' __ $(Identifier) )* )? #List } __ ')'
+FunctionDeclaration             = { "function" __ $name(Identifier) __ $param(FunctionParameterList) __ $body(FunctionBody) #FuncDecl }
+FunctionExpression              = { "function" __ ( $name(Identifier) __ )? $param(FunctionParameterList) __ $body(FunctionBody) #Lambda }
+FunctionParameterList           = '(' __ { ( $(MethodParam) ( __ ',' __ $(MethodParam) )* )? #List } __ ')'
+MethodParam                     = { $name(Identifier) #Param }
 FunctionBody                    = '{' { ( __ $(SourceElement) )* #Block } __ '}'
 
-/*Statement*/
+/* Statement */
 Statement                       = Block
                                 / EmptyStatement
                                 / VariableStatement
@@ -181,48 +180,54 @@ Statement                       = Block
                                 / FunctionDeclaration
                                 / ExpressionStatement
 Block                           = FunctionBody
-EmptyStatement                  = { ';' #Empty }
-VariableStatement               = "var" __ VariableDeclarationList EOS 
-VariableDeclarationList         = { $(VariableDeclaration) ( __ ',' __ $(VariableDeclaration) )* #VarDeclList }
-VariableDeclaration             = { $name(Identifier) ( __ addInitialiser )? #VarDecl }
+EmptyStatement                  = ';' { #Empty }
+VariableStatement               = "var" __ VariableDeclaration EOS
+VariableDeclaration             = { $list(VariableDeclarationList) #MultiVarDecl }
+                                / InitDecl
+VariableDeclarationList         = { $(InitDecl) ( __ ',' __ $(InitDecl) )+ #List }
+InitDecl                        = { $name(Identifier) ( __ addInitialiser )? #VarDecl }
 addInitialiser                  = '=' __ $expr(AssignmentExpression)
-ExpressionStatement             = !'{' Expression EOS
+//ExpressionStatement           = !'{' Expression EOS
+ExpressionStatement             = Expression EOS
 IfStatement                     = { 'if' __ addCondition __ $then(Statement) ( __ "else" __ $else(Statement) )? #If }
 DoWhileStatement                = { "do" __ $body(Statement) __ 'while' __ addCondition EOS #DoWhile }
 WhileStatement                  = { 'while' __ addCondition __ $body(Statement) #While }
 addCondition                    = '(' __ $cond(Expression) __ ')'
 
 /* For statement */
-ForStatement                    = { 'for' __ '(' __ addForStatementPart __ ')' __ $body(Statement) }
-addForStatementPart             = "var" #ForVar __ <on !InOperator $init(VariableDeclarationList)> __ ';' __ $cond(Expression)? __ ';' __ $iter(Expression)?
-                                / #For <on !InOperator $init(Expression)>? __ ';' __ $cond(Expression)? __ ';' __ $iter(Expression)?
-ForEachStatement                = { 'for' __ '(' __ addForEachPart __ ')' __ $body(Statement) #Foreach }
-addForEachPart                  = #ForVarEach "var" __ <on !InOperator $init(VariableDeclarationList)> __ "in" __ $iter(Expression)
-                                / #ForEach $init(LeftHandSideExpression) __ "in" __ $iter(Expression)
-ContinueStatement               = "continue" {( _ $label(Identifier) )? #Continue } EOS 
-BreakStatement                  = "break" { ( _ $label(Identifier) )? #Break } EOS 
-ReturnStatement                 = "return" { ( _ $expr(Expression) )? #Return } EOS 
-ThrowStatement                  = "throw" _ { $expr(Expression) #Throw } EOS
-WithStatement                   = 'with' __ { addCondition __ $body(Statement) #With }
+ForStatement                    = { 'for' __ '(' __ addForStatementPart __ ')' __ $body(Statement) #For }
+addForStatementPart             = "var" __ <on !InOperator $init(VariableDeclaration)> __ ';' __ $cond(Expression)? __ ';' __ $body(Expression)?
+                                / <on !InOperator $init(Expression)>? __ ';' __ $cond(Expression)? __ ';' __ $body(Expression)?
+ForEachStatement                = { 'for' __ '(' __ addForEachPart __ ')' __ $(Statement) #Foreach }
+addForEachPart                  = "var" __ <on !InOperator $name(VariableDeclaration)> __ "in" __ $iter(Expression)
+                                / $name(LeftHandSideExpression) __ "in" __ $iter(Expression)
+ContinueStatement               = { "continue" ( _ $label(Identifier) )? EOS #Continue `` }
+BreakStatement                  = { "break" ( _ $label(Identifier) )? EOS #Break `` }
+ReturnStatement                 = { "return" ( _ $expr(Expression) )? EOS #Return }
+ThrowStatement                  = { "throw" _ $expr(Expression) EOS #Throw }
+WithStatement                   = { 'with' __ addCondition __ $(Statement) #JSWith }
 
 /* Switch Statement */
-SwitchStatement                 = { 'switch' __ addCondition __ $case(CaseBlock) #Switch }
-CaseBlock                       = { '{' __ addCaseClauses? __ '}' #List }
+SwitchStatement                 = { 'switch' __ addCondition __ $body(CaseBlock) #Switch }
+CaseBlock                       = { '{' __ addCaseClauses? __ '}' #Block }
 addCaseClauses                  = $(CaseClause) ( __ $(CaseClause) )*
-CaseClause                      = { "case" __ $case(Expression) __ ':' __ ( $body(Statement) __ )* #Case }
-                                / { 'default' __ ':' __ ( $body(Statement) __ )* #Default }
+CaseClause                      = { "case" __ $cond(Expression) __ ':' __ ( $body(Statement) __ )* #SwitchCase }
+                                / { 'default' __ ':' __ ( $body(Statement) __ )* #SwitchDefault }
 
-/* Labelled Statement */
-LabelledStatement               = { $label(Identifier) __ ':' __ $body(Statement) #Label }
+/* Labeled Statement */
+LabelledStatement               = { $(Identifier) __ ':' __ $(Statement) #JSLabeledStatement }
 
 /* Try/catch/finally statement */
-TryStatement                    = { "try" __ $body(Block) __ ($catch(Catch) ( __ addFinally )? / addFinally) #Try }
-Catch                           = { $({ 'catch' __ '(' __ $cond(Identifier) __ ')' __ $body(Block) #Catch }) #List }
+TryStatement                    = { "try" __ $try(Block) __ ($catch(Catch) ( __ addFinally )? / addFinally) #Try }
+Catch                           = { $({ 'catch' __ '(' __ $name(Identifier) __ ')' __ $body(Block) #Catch }) #List }
 addFinally                      = "finally" __ $finally(Block)
-DebuggerStatement               = "debugger" EOS { #Debugger }
+DebuggerStatement               = "debugger" EOS { #JSDebuggerStatement }
 
 /* Expression */
-Expression                      = AssignmentExpression {$left __ ',' __ $right(AssignmentExpression) #Comma }*
+/* Binary Operators */
+/* Unary Operator */
+/* Primary */
+Expression                      = AssignmentExpression {$ __ ',' __ $(AssignmentExpression) #JSComma }*
 AssignmentExpression            = { <on InOperator $left(LeftHandSideExpression)> __ addAssignmentOperator __ $right(AssignmentExpression) }
                                 / ConditionalExpression
 addAssignmentOperator           = '=' #Assign
@@ -236,9 +241,9 @@ addAssignmentOperator           = '=' #Assign
                                 / '&=' #AssignBitwiseAnd
                                 / '^=' #AssignBitwiseXOr
                                 / '|=' #AssignBitwiseOr
-ConditionalExpression           = LogicalOrExpression {$left __ '?' __ <on InOperator $(AssignmentExpression)> __ ':' __ $right(AssignmentExpression) #Conditional }*
-LogicalOrExpression             = LogicalAndExpression {$left __ '||' __ $right(LogicalAndExpression) #LogicalOr }*
-LogicalAndExpression            = BitwiseOrExpression {$left __ '&&' __ $right(BitwiseOrExpression) #LogicalAnd }*
+ConditionalExpression           = LogicalOrExpression {$cond __ '?' __ <on InOperator $then(AssignmentExpression)> __ ':' __ $else(AssignmentExpression) #Conditional }*
+LogicalOrExpression             = LogicalAndExpression {$left __ '||' __ $right(LogicalAndExpression) #Or }*
+LogicalAndExpression            = BitwiseOrExpression {$left __ '&&' __ $right(BitwiseOrExpression) #And }*
 BitwiseOrExpression             = BitwiseXorExpression {$left __ "|" __ $right(BitwiseXorExpression) #BitwiseOr }*
 BitwiseXorExpression            = BitwiseAndExpression {$left __ "^" __ $right(BitwiseAndExpression) #BitwiseXor }*
 BitwiseAndExpression            = EqualityExpression {$left __ "&" __ $right(EqualityExpression) #BitwiseAnd }*
@@ -249,7 +254,7 @@ RelationalExpression            = ShiftExpression {$left __ addRelationalOperato
 addRelationalOperator           = '<' ('=' #LessThanEquals / #LessThan)
                                 / '>' ('=' #GreaterThanEquals / #GreaterThan)
                                 / "instanceof" #InstanceOf
-                                / <if InOperator> "in" #HashIn
+                                / <if InOperator> "in" #JSHashIn
 ShiftExpression                 = <on InOperator ( AdditiveExpression {$left __ addShiftOperator __ $right(AdditiveExpression) }* )>
 addShiftOperator                = "<<" #LeftShift
                                 / '>>' ('>' #LogicalRightShift / !'=' #RightShift)
@@ -257,40 +262,39 @@ AdditiveExpression              = MultiplicativeExpression {$left __ ("+" #Add /
 MultiplicativeExpression        = UnaryExpression {$left __ ("*" #Mul / "/" #Div / "%" #Mod) __ $right(UnaryExpression) }*
 UnaryExpression                 = PostfixExpression
                                 / { addUnaryOperator __ $expr(UnaryExpression) }
-addUnaryOperator                = '++' #PrefixInc
-                                / '--' #PrefixDec
+addUnaryOperator                = '++' #PreInc
+                                / '--' #PreDec
                                 / '+' #Plus
                                 / '-' #Minus
-                                / '~' #BitwiseNot
-                                / "!" #LogicalNot
-                                / "delete" #DeleteProperty
-                                / "void" #VoidExpression
+                                / '~' #Compl
+                                / "!" #Not
+                                / "delete" #JSDeleteProperty
+                                / "void" #JSVoidExpression
                                 / "typeof" #TypeOf
-PostfixExpression               = { $expr(LeftHandSideExpression) _ addPostfixOperator }
+PostfixExpression               = { $recv(LeftHandSideExpression) _ addPostfixOperator }
                                 / LeftHandSideExpression
-addPostfixOperator              = '++' #SuffixInc
-                                / '--' #SuffixDec
-Untyped                         = { `Untyped` #Untyped }
-LeftHandSideExpression          = CallExpression
+addPostfixOperator              = '++' #Inc
+                                / '--' #Dec
+//Untyped                       = { `Untyped` #Untyped }
+LeftHandSideExpression          = CallOrMemberExpression
                                 / NewExpression
-CallExpression                  = MemberExpression {$self __ addCallOrMemberOperator }*
-addCallOrMemberOperator         = '.' __ $field(IdentifierName) #Field
-                                / $params(Arguments) #Apply
-                                / '[' __ $param(Expression) __ ']' #Index
+CallOrMemberExpression          = PrimaryExpression ( {$name __ addCallOperator } / {$recv __ addMemberOperator } )*
+MemberExpression                = PrimaryExpression {$recv __ addMemberOperator }*
+addCallOperator                 = $param(Arguments) #Apply
 Arguments                       = { '(' __ ( addArgumentList __ )? ')' #List }
 addArgumentList                 = $(AssignmentExpression) ( __ ',' __ $(AssignmentExpression) )*
-MemberExpression                = PrimaryExpression {$this __ addMemberOperator }*
-addMemberOperator               = '.' __ $field(IdentifierName) #Field
-                                / '[' __ $param(Expression) __ ']' #Index
+addMemberOperator               = '.' __ $name(IdentifierName) #Field
+                                / '[' __ $param({ $(Expression) #List }) __ ']' #Indexer
 
 /** FIXME
 ReceiverExpression
-    = PrimaryExpression 
-    / FunctionExpression 
+    = PrimaryExpression
+    / FunctionExpression
     / NewExpressionWithArgs
 **/
 NewExpression                   = MemberExpression
-                                / { "new" __ $class(NewExpression) #New }
+                                / { "new" __ $(NewExpression) #JSNew }
+NewExpressionWithArgs           = { "new" __ $(MemberExpression) __ $(Arguments) #JSNew }
 PrimaryExpression               = ThisExpression
                                 / '(' __ Expression __ ')'
                                 / Literal
@@ -299,8 +303,7 @@ PrimaryExpression               = ThisExpression
                                 / FunctionExpression
                                 / NewExpressionWithArgs
                                 / Identifier
-ThisExpression                  = { "this" #This }
-NewExpressionWithArgs           = { "new" __ $class(MemberExpression) __ $params(Arguments) #New }
+ThisExpression                  = "this" { #This }
 
 /* ArrayLietral */
 ArrayLiteral                    = { '[' __ (( addElisionList __ )? ']' / addElementList addArrayDelimitor? __ ']') #Array }
@@ -312,9 +315,9 @@ ElisionExpression               = ',' { #Undefined }
 /* ObjectLiteral */
 ObjectLiteral                   = { '{' __ ( addPropertyList __ ( ',' __ )? )? '}' #Object }
 addPropertyList                 = $(PropertyAssignment) ( __ ',' __ $(PropertyAssignment) )*
-PropertyAssignment              = { $key(PropertyName) __ ':' __ $value(AssignmentExpression) #Property }
-                                / { "get" __ $key(PropertyName) __ '(' __ ')' __ $body(FunctionBody) #GetterProperty }
-                                / { "set" __ $key(PropertyName) __ '(' __ $param(Identifier) __ ')' __ $body(FunctionBody) #SetterProperty }
+PropertyAssignment              = { $key(PropertyName) __ ':' __ $value(AssignmentExpression) #$ }
+//                              / { "get" __ $(PropertyName) __ '(' __ ')' __ $(FunctionBody) #GetterProperty }
+//                              / { "set" __ $(PropertyName) __ '(' __ $(Identifier) __ ')' __ $(FunctionBody) #SetterProperty }
 PropertyName                    = StringLiteral
                                 / NumericLiteral
                                 / IdentifierName
@@ -389,16 +392,16 @@ Literal                         = NullLiteral
                                 / NumericLiteral
                                 / StringLiteral
                                 / RegularExpressionLiteral
-NullLiteral                     = { "null" #Null }
-BooleanLiteral                  = { "true" #True }
-                                / { "false" #False }
+NullLiteral                     = { #Null } "null"
+BooleanLiteral                  = { #True } "true"
+                                / { #False } "false"
 NumericLiteral                  = HexIntegerLiteral
                                 / FloatingPointLiteral
                                 / OctaIntegerLiteral
                                 / DecimalIntegerLiteral
 DecimalIntegerLiteral           = { DECIMAL_INTEGER #Integer }
-OctaIntegerLiteral              = { '0' OCT+ #OctalInteger }
-HexIntegerLiteral               = { '0' [xX] HEX* #HexInteger }
+OctaIntegerLiteral              = { '0' OCT* #Integer }
+HexIntegerLiteral               = { '0' [xX] HEX* #Integer }
 FloatingPointLiteral            = { DECIMAL_INTEGER? '.' DIGIT+ EXPONENT_PART? #Double }
                                 / { DECIMAL_INTEGER EXPONENT_PART #Double }
 DECIMAL_INTEGER                 = [1-9] DIGIT*
@@ -425,7 +428,7 @@ HEX_ESCAPE_SEQUENCE             = [xX] HEX HEX
 UNICODE_ESCAPE_SEQUUENCE        = [uU] HEX4
 
 /* Regular Expression */
-RegularExpressionLiteral        = { '/' REGEX_BODY '/' REGEX_FLAGS #RegExp }
+RegularExpressionLiteral        = { '/' REGEX_BODY '/' REGEX_FLAGS #JSRegExpLiteral }
 REGEX_BODY                      = REGEX_FIRST_CHAR REGEX_CHAR*
 REGEX_FIRST_CHAR                = REGEX_BACKSLASH_SEQUENCE
                                 / ![*\\/\x5b] REGEX_NON_TERMINATOR
@@ -612,33 +615,30 @@ getValue(); // 1
 
 
 /* Formatter */
-
 format #Source[*] `$[0 `${NL}` -1]`
 format #FuncDecl[*] `function $[0] $[1]`
 format #FuncDecl[*] `function $[0] $[1] $[2]`
 format #Block[*] `{}`
-format #Block[*] `{${inc}${NL}$[0 `${NL}` -1]${dec}${NL}}`
+format #Block[*] `{${inc}${NL}$[0 `${NL}` -1]${dec}}`
 format #Empty[*] `;`
-format #VarDeclStmt[*] `var $[0];`
-format #VarDecl[*] `$[0]`
-format #VarDecl[*] `$[0] = $[1]`
+format #MultiVarDecl[*] `var $[0]`
+format #VarDecl[*] `var $[0]`
+format #VarDecl[*] `var $[0] = $[1]`
 format #If[*] `if ($[0]) $[1]`
-format #If[*] `if ($[0]) $[1]${NL}else $[2]`
+format #If[*] `if ($[0]) $[1]{$NL}else $[2]`
 format #While[*] `while ($[0]) $[1]`
-format #DoWhile[*] `do $[1]${NL}while ($[0])`
+format #DoWhile[*] `do $[1]{$NL}while ($[0])`
 format #For[*] `for ($[0]; $[1]; $[2]) $[3]`
-format #ForVar[*] `for (var $[0]; $[1]; $[2]) $[3]`
 format #ForEach[*] `for ($[0] in $[1]) $[2]`
-format #ForVarEach[*] `for (var $[0] in $[1]) $[2]`
 format #Continue[*] `continue;`
 format #Continue[*] `continue $[0];`
 format #Break[*] `break;`
 format #Break[*] `break $[0];`
 format #Return[*] `return;`
 format #Return[*] `return $[0];`
-format #With[*] `with ($[0]) $[1]`
-format #Label[*] `$[0]:${NL}$[1]`
-format #Comma[*] `$[0], $[1]`
+format #JSWith[*] `with ($[0]) $[1]`
+format #JSLabeledStatement[*] `$[0]:${NL}$[1]`
+format #JSComma[*] `$[0], $[1]`
 format #Assign[*] `$[0] = $[1]`
 format #AssignMul[*] `$[0] *= $[1]`
 format #AssignDiv[*] `$[0] /= $[1]`
@@ -652,8 +652,8 @@ format #AssignBitwiseAnd[*] `$[0] &= $[1]`
 format #AssignBitwiseXOr[*] `$[0] ^= $[1]`
 format #AssignBitwiseOr[*] `$[0] != $[1]`
 format #Conditional[*] `$[0] ? $[1] : $[2]`
-format #LogicalAnd[*] `$[0] && $[1]`
-format #LogicalOr[*] `$[0] || $[1]`
+format #And[*] `$[0] && $[1]`
+format #Or[*] `$[0] || $[1]`
 format #BitwiseOr[*] `($[0] | $[1])`
 format #BitwiseXor[*] `($[0] ^ $[1])`
 format #BitwiseAnd[*] `($[0] & $[1])`
@@ -664,7 +664,7 @@ format #LessThan[*] `$[0] < $[1]`
 format #GreaterThanEquals[*] `$[0] >= $[1]`
 format #GreaterThan[*] `$[0] > $[1]`
 format #InstanceOf[*] `$[0] instanceof $[1]`
-format #HashIn[*] `$[0] in $[1]`
+format #JSHashIn[*] `$[0] in $[1]`
 format #LeftShift[*] `($[0] << $[1])`
 format #RightShift[*] `($[0] >> $[1])`
 format #LogicalRightShift[*] `($[0] >>> $[1])`
@@ -673,25 +673,24 @@ format #Sub[*] `($[0] - $[1])`
 format #Mul[*] `($[0] * $[1])`
 format #Div[*] `($[0] / $[1])`
 format #Mod[*] `($[0] % $[1])`
-format #PrefixInc[*] `++$[0]`
-format #PrefixDec[*] `--$[0]`
+format #PreInc[*] `++$[0]`
+format #PreDec[*] `--$[0]`
 format #Plus[*] `+$[0]`
 format #Minus[*] `-$[0]`
-format #BitwiseNot[*] `~$[0]`
-format #LogicalNot[*] `!$[0]`
-format #Delete[*] `delete($[0])`
-format #Void[*] `void($[0])`
+format #Compl[*] `~$[0]`
+format #Not[*] `!$[0]`
+format #JSDeleteProperty[*] `delete($[0])`
+format #JSVoidExpression[*] `void($[0])`
 format #TypeOf[*] `typeof($[0])`
-format #SuffixInc[*] `$[0]++`
-format #SuffixDec[*] `$[0]--`
+format #Inc[*] `$[0]++`
+format #Dec[*] `$[0]--`
 format #This[*] `this`
-format #Apply[*] `$[0]$[1]`
 format #Field[*] `$[0].$[1]`
-format #Index[*] `$[0][$[1]]`
+format #Indexer[*] `$[0][$[1]]`
 format #List[*] `($[0 `, ` -1])`
 format #Array[*] `[$[0 `, ` -1]]`
 format #Object[*] `{$[0 `, ` -1]}`
-format #Property[*] `$[0]: $[1]`
+format #$[*] `$[0]: $[1]`
 format #GetterProperty[*] `get $[0]() $[1]`
 format #SetterProperty[*] `set $[0]($[1]) $[2]`
 format #Name[*] `${text}`
@@ -699,10 +698,7 @@ format #Null[*] `null`
 format #True[*] `true`
 format #False[*] `false`
 format #Integer[*] `${text}`
-format #OctalInteger[*] `${text}`
-format #HexInteger[*] `${text}`
 format #Double[*] `${text}`
 format #String[*] `"${text}"`
 format #Character[*] `'${text}'`
-format #RegExp[*] `${text}`
-// formatted by $ nez format
+format #JSRegExpLiteral[*] `${text}`
