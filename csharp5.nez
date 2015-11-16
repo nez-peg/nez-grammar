@@ -2,15 +2,14 @@
   C# 5.0 Grammar
   Based on C# Language Specification 5.0 [1]
   [1] http://www.microsoft.com/en-us/download/confirmation.aspx?id=7029
-
   Author:
     Tetsuro Matsumura (https://github.com/tetsurom/)
 */
 
 //--------------------------------------------------
-// Peg4d+L Toplevels
+// Nez Toplevels
 //--------------------------------------------------
-File                                      = CompilationUnit
+File                                      = <on !AwaitKeyword CompilationUnit>
 Chunk                                     = Expression
                                           / Statement
                                           / ClassMemberDeclaration
@@ -152,6 +151,49 @@ W                                         = IDENTIFIER_PART_CHARACTER
 "void"                                    = 'void' !W
 "await"                                   = 'await' !W
 "async"                                   = 'async' !W
+"define"                                  = 'define' !W
+"undef"                                   = 'undef' !W
+"alias"                                   = 'alias' !W
+"dynamic"                                 = 'dynamic' !W
+"var"                                     = 'var' !W
+"from"                                    = 'from' !W
+"let"                                     = 'let' !W
+"where"                                   = 'where' !W
+"join"                                    = 'join' !W
+"on"                                      = 'on' !W
+"equals"                                  = 'equals' !W
+"into"                                    = 'into' !W
+"orderby"                                 = 'orderby' !W
+"ascending"                               = 'ascending' !W
+"descending"                              = 'descending' !W
+"select"                                  = 'select' !W
+"group"                                   = 'group' !W
+"by"                                      = 'by' !W
+"yield"                                   = 'yield' !W
+"field"                                   = 'field' !W
+"method"                                  = 'method' !W
+"param"                                   = 'param' !W
+"property"                                = 'property' !W
+"type"                                    = 'type' !W
+"assembly"                                = 'assembly' !W
+"module"                                  = 'module' !W
+"partial"                                 = 'partial' !W
+"get"                                     = 'get' !W
+"set"                                     = 'set' !W
+"add"                                     = 'add' !W
+"remove"                                  = 'remove' !W
+"elif"                                    = 'elif' !W
+"endif"                                   = 'endif' !W
+"line"                                    = 'line' !W
+"hidden"                                  = 'hidden' !W
+"error"                                   = 'error' !W
+"warning"                                 = 'warning' !W
+"region"                                  = 'region' !W
+"endregion"                               = 'endregion' !W
+"pragma"                                  = 'pragma' !W
+"disable"                                 = 'disable' !W
+"restore"                                 = 'restore' !W
+"CS"                                      = 'CS' !W
 KEYWORD                                   = "abstract"
                                           / "byte"
                                           / "class"
@@ -281,10 +323,11 @@ QUOTE_ESCAPE_SEQUENCE                     = '""'
 NullLiteral                               = { "null" #Null }
 
 // B.1.9 Operators and punctuators
+"?"                                       = '?' !'?'
 "&"                                       = '&' !'&'
 "*"                                       = '*' !'='
 "+"                                       = '+' ![+=]
-"-"                                       = '-' ![-=]
+"-"                                       = '-' ![-=>]
 "!"                                       = '!' !'='
 ":"                                       = ':' !':'
 "/"                                       = '/' !'='
@@ -296,9 +339,31 @@ NullLiteral                               = { "null" #Null }
 "^"                                       = '^' !'='
 "|"                                       = '|' !'='
 "="                                       = '=' ![=>]
+"??"                                      = '??'
+"&&"                                      = '&&'
+"++"                                      = '++'
+"--"                                      = '--'
+"::"                                      = '::'
+"<="                                      = '<='
+"=>"                                      = '=>'
+">="                                      = '>='
+"||"                                      = '||'
+"=="                                      = '=='
+"!="                                      = '!='
+"->"                                      = '->'
+"~"                                       = '~'
+","                                       = ','
+"."                                       = '.'
+";"                                       = ';'
+"("                                       = '('
+")"                                       = ')'
+"["                                       = '['
+"]"                                       = ']'
+"{"                                       = '{'
+"}"                                       = '}'
 
 // B.1.10 Pre-processing directives
-PP_DIRECTIVE                              = '#' !NEW_LINE . NEW_LINE
+PP_DIRECTIVE                              = '#' ( !NEW_LINE . )+ (NEW_LINE / !.)
 
 //--------------------------------------------------
 // B.2 Syntactic grammar
@@ -306,12 +371,10 @@ PP_DIRECTIVE                              = '#' !NEW_LINE . NEW_LINE
 // B.2.1 Basic concepts
 NamespaceName                             = NamespaceOrTypeName
 TypeName                                  = NamespaceOrTypeName
-NamespaceOrTypeName                       = SimpleName {$ __ "." __ $(SimpleName) #Field }*
-                                          / QualifiedAliasMember
+NamespaceOrTypeName                       = (QualifiedAliasMember / SimpleName) {$ __ "." __ $(SimpleName) #Field }*
 SimpleName                                = { $(Identifier) $(TypeArgumentList) #Type }
                                           / Identifier
-Left1TypeName                             = SimpleName {$ __ "." __ $(SimpleName) #Field &( __ "." __ SimpleName ) }*
-                                          / QualifiedAliasMember
+Left1TypeName                             = (QualifiedAliasMember / SimpleName) {$ __ "." __ $(SimpleName) #Field &( __ "." __ IDENTIFIER ) }*
 
 // B.2.2 Types
 /**
@@ -323,13 +386,14 @@ Left1TypeName                             = SimpleName {$ __ "." __ $(SimpleName
     [example: System.Collection.List<int?>]
     [example: IDicionary<string, int>]
 **/
-Type                                      = SimpleType {$ addTypeSuffix }*
-NonArrayType                              = SimpleType {$ $({ `Nullable` #Name }) '?' #Type }*
-ArrayType                                 = NonArrayType {$ $({ `Array` #Name }) $(RankSpecifier) #Type }+
-addTypeSuffix                             = $({ `Nullable` #Name }) '?' #Type
-                                          / $({ `Array` #Name }) $(RankSpecifier) #Type
+Type                                      = SimpleType {$ __ (addNullableSuffix / addArraySuffix / addPointerSuffix) }*
+NonArrayType                              = SimpleType {$ __ (addNullableSuffix / addPointerSuffix) }*
+ArrayType                                 = NonArrayType {$ __ addArraySuffix } {$ __ (addArraySuffix / addPointerSuffix) }*
+addNullableSuffix                         = $({ `Nullable` #Name }) "?" !( __ Expression __ ":" ) #Type
+addArraySuffix                            = $({ `Array` #Name }) $(RankSpecifier) #Type
 SimpleType                                = PredefinedType
                                           / TypeName
+                                          / VoidPointerType
 PredefinedType                            = IntegralType
                                           / { $({ ("float" / "double" / "object" / "dynamic" / "string" / "bool" / "decimal") #Name }) #Type }
 IntegralType                              = { $({ ("sbyte" / "byte" / "short" / "ushort" / "int" / "uint" / "long" / "ulong" / "char") #Name }) #Type }
@@ -369,16 +433,20 @@ PrimaryExpression                         = PrimaryNoArrayCreationExpression
 MemberAccessExpression                    = { $(PrimaryExpression) __ "." __ $(SimpleName) #Field }
                                           / { $(PredefinedType) __ "." __ $(SimpleName) #Field }
                                           / { $(QualifiedAliasMember) __ "." __ $(Identifier) #Field }
-ElementAccessExpression                   = { $(PrimaryNoArrayCreationExpression) __ "[" __ $(ArgumentList) __ "]" #MultiIndex }
+ElementAccessExpression                   = { $(PrimaryNoArrayCreationExpression) __ "[" __ $(Expression) __ "]" #Index }
+                                          / { $(PrimaryNoArrayCreationExpression) __ "[" __ $(ArgumentList) __ "]" #MultiIndex }
 PostfixExpressionLeftSide                 = MemberAccessExpression
                                           / ElementAccessExpression
+                                          / PointerMemberAccessExpression
                                           / PrimaryExpression
 PostfixExpression                         = PostfixExpressionLeftSide {$ __ addPostfixOperator }*
 addPostfixOperator                        = $(FunctionStyleArgList) #Apply
+                                          / "[" __ $(Expression) __ "]" #Index
                                           / "[" __ $(ArgumentList) __ "]" #MultiIndex
                                           / "." __ $(SimpleName) #Field
                                           / "++" #SuffixInc
                                           / "--" #SuffixDec
+                                          / addPointerMemberAccessOperator
 InvocationExpression                      = PostfixExpression
 
 //    = PostfixExpressionLeftSide {@ __ @FunctionStyleArgList #Apply }+
@@ -405,7 +473,7 @@ InitializerValue                          = Expression
 CollectionInitializer                     = { "{" __ ( $(ElementInitializerList) __ )? "}" #CollectionInitializer }
                                           / { "{" __ $(ElementInitializerList) __ "," __ "}" #CollectionInitializer }
 ElementInitializerList                    = { $(ElementInitializer) ( __ "," __ $(ElementInitializer) )* #List }
-ElementInitializer                        = <on !Assignment Expression>
+ElementInitializer                        = NonAssignmentExpression
                                           / "{" __ ExpressionList __ "}"
 ExpressionList                            = { $(Expression) ( __ "," __ $(Expression) )* #List }
 ArrayCreationExpression                   = { "new" __ $(NonArrayType) __ "[" __ $(ExpressionList) __ "]" ( __ $(RankSpecifier) )? ( __ $(ArrayInitializer) )? #NewArray }
@@ -443,6 +511,8 @@ addUnaryOperator                          = "+" #Plus
                                           / "--" #PrefixDec
                                           / "(" __ $(Type) __ ")" #Cast
                                           / <if AwaitKeyword> "await" #Await
+                                          / addPointerIndirectionOperator
+                                          / addAddressOfOperator
 PreIncrementExpression                    = { "++" #PrefixInc __ $(UnaryExpression) }
 PreDecrementExpression                    = { "--" #PrefixDec __ $(UnaryExpression) }
 AwaitExpression                           = { "await" #Await __ $(UnaryExpression) }
@@ -465,11 +535,11 @@ InclusiveOrExpression                     = ExclusiveOrExpression {$ __ "|" __ $
 ConditionalAndExpression                  = InclusiveOrExpression {$ __ "&&" __ $(InclusiveOrExpression) #LogicalAnd }*
 ConditionalOrExpression                   = ConditionalAndExpression {$ __ "||" __ $(ConditionalAndExpression) #LogicalOr }*
 NullCoalescingExpression                  = ConditionalOrExpression {$ __ "??" __ $(ConditionalOrExpression) #NullCoalescing }*
-ConditionalExpression                     = NullCoalescingExpression {$ __ '?' __ $(Expression) __ ':' __ $(Expression) #Conditional }*
+ConditionalExpression                     = NullCoalescingExpression {$ __ "?" __ $(Expression) __ ":" __ $(Expression) #Conditional }*
 
 // Lambda
 LambdaExpression                          = { ( addLambdaModifier __ )? $(AnonymousFunctionSignature) __ "=>" __ $(AnonymousFunctionBody) #FuncDecl }
-AnonymousMethodExpression                 = { ( addLambdaModifier __ )? "delegate" __ $(ExplicitAnonymousFunctionSignature)? $(Block) #FuncDecl }
+AnonymousMethodExpression                 = { ( addLambdaModifier __ )? "delegate" __ ( $(ExplicitAnonymousFunctionSignature) __ )? $(Block) #FuncDecl }
 addLambdaModifier                         = $({ $({ "async" #Text }) #List })
 AnonymousFunctionSignature                = ExplicitAnonymousFunctionSignature
                                           / ImplicitAnonymousFunctionSignature
@@ -502,7 +572,8 @@ LetClause                                 = { "let" __ $(Identifier) __ "=" __ $
 WhereClause                               = { "where" __ $(BooleanExpression) #QueryWhere }
 JoinClause                                = { "join" __ addJoinBody #QueryJoin }
 JoinIntoClause                            = { "join" __ addJoinBody __ "into" __ $(Identifier) #QueryJoinInto }
-addJoinBody                               = ( $(Type) __ )? $(Identifier) __ "in" __ $(Expression) __ "on" __ $(Expression) __ "equals" __ $(Expression)
+addJoinBody                               = $(Type) __ $(Identifier) __ "in" __ $(Expression) __ "on" __ $(Expression) __ "equals" __ $(Expression)
+                                          / $(Identifier) __ "in" __ $(Expression) __ "on" __ $(Expression) __ "equals" __ $(Expression)
 OrderByClause                             = { "orderby" ( __ $(Ordering) )+ #QueryOrderBy }
 Ordering                                  = { $(Expression) ( __ $(OrderingDirection) )? #QueryOrdering }
 OrderingDirection                         = { "ascending" #QueryAscending }
@@ -524,9 +595,10 @@ addAssignmentOperator                     = '=' #Assign
                                           / '^=' #AssignBitwiseXOr
                                           / '<<=' #AssignLeftShift
                                           / '>>=' #AssignRightShift
-Expression                                = QueryExpression
+Expression                                = Assignment
+                                          / NonAssignmentExpression
+NonAssignmentExpression                   = QueryExpression
                                           / LambdaExpression
-                                          / <if Assignment> Assignment
                                           / ConditionalExpression
 ConstantExpression                        = Expression
 BooleanExpression                         = Expression
@@ -547,10 +619,12 @@ EmbeddedStatement                         = Block
                                           / LockStatement
                                           / UsingStatement
                                           / YieldStatement
+                                          / UnsafeStatement
+                                          / FixedStatement
 Block                                     = { "{" __ ( $(Statement) __ )* "}" #Block }
 StatementList                             = { $(Statement) ( __ $(Statement) )* #List }
 EmptyStatement                            = { ";" #Empty }
-LabeledStatement                          = { $(Identifier) __ ':' __ $(Statement) #Label }
+LabeledStatement                          = { $(Identifier) __ ":" __ $(Statement) #Label }
 DeclarationStatement                      = LocalVariableDeclaration __ ";"
                                           / LocalConstantDeclaration __ ";"
 LocalVariableDeclaration                  = { $(LocalVariableType) __ $(LocalVariableDeclarators) #VarDeclStmt }
@@ -560,11 +634,12 @@ LocalVariableDeclarators                  = { $(LocalVariableDeclarator) ( __ ",
 LocalVariableDeclarator                   = { $(Identifier) ( __ "=" __ $(LocalVariableInitializer) )? #VarDecl }
 LocalVariableInitializer                  = Expression
                                           / ArrayInitializer
-LocalConstantDeclaration                  = { "const" __ $(Type) __ $({ $(ConstantDeclarator) #List }) #ConstDeclStmt }
+                                          / StackAllocInitializer
+LocalConstantDeclaration                  = { "const" __ $(Type) __ $(ConstantDeclarators) #ConstDeclStmt }
+ConstantDeclarators                       = { $(ConstantDeclarator) ( __ "," __ $(ConstantDeclarator) )* #List }
 ConstantDeclarator                        = { $(Identifier) __ "=" __ $(ConstantExpression) #VarDecl }
 ExpressionStatement                       = StatementExpression __ ";"
-StatementExpression                       = ObjectCreationExpression
-                                          / Assignment
+StatementExpression                       = Assignment
                                           / PostfixExpression
                                           / PreIncrementExpression
                                           / PreDecrementExpression
@@ -577,8 +652,8 @@ SwitchStatement                           = { 'switch' __ addCondition __ $(Swit
 SwitchBlock                               = { '{' __ ( $(SwitchSection) __ )* '}' #List }
 SwitchSection                             = { $(SwitchLabels) __ $(StatementList) }
 SwitchLabels                              = { $(SwitchLabel) ( __ $(SwitchLabel) )* #List }
-SwitchLabel                               = { "case" __ $(ConstantExpression) __ ':' #Case }
-                                          / { 'default' __ ':' #Default }
+SwitchLabel                               = { "case" __ $(ConstantExpression) __ ":" #Case }
+                                          / { 'default' __ ":" #Default }
 IterationStatement                        = WhileStatement
                                           / DoStatement
                                           / ForStatement
@@ -644,20 +719,20 @@ QualifiedAliasMember                      = { $(Identifier) __ "::" __ $(SimpleN
 ClassDeclaration                          = { ( $(ClassModifierAndAttributes) __ )? "class" __ $(Identifier) __ ( $(TypeParameterList) __ )? ( addClassBase __ )? ( $(TypeParameterConstraintsClauses) __ )? $(ClassBody) ( __ ";" )? #Class }
 ClassModifierAndAttributes                = { ( addAttributes __ )? ( $(ClassModifier) __ )* $({ "partial" #Text })? #List }
 ClassModifier                             = ConstantModifier
-                                          / { ("abstract" / "sealed" / "static") #Text }
-TypeParameterList                         = { "<" __ $(TypeParameterWithAttribute) ( __ $(TypeParameterWithAttribute) )* __ ">" #List }
+                                          / { ("abstract" / "sealed" / "static" / "unsafe") #Text }
+TypeParameterList                         = { "<" __ $(TypeParameterWithAttribute) ( __ "," __ $(TypeParameterWithAttribute) )* __ ">" #List }
 TypeParameterWithAttribute                = { ( $(Attributes) __ )? $(TypeParameter) #Parameter }
 addClassBase                              = ":" __ $({ $(TypeName) #List }) $({ ( __ "," __ $(TypeName) )* #List })
 TypeParameterConstraintsClauses           = { $(TypeParameterConstraintsClause) ( __ $(TypeParameterConstraintsClause) )* #List }
 TypeParameterConstraintsClause            = { "where" __ $(TypeParameter) __ ":" __ $(TypeParameterConstraints) #TypeParameterConstraint }
-TypeParameterConstraints                  = { addSecondaryConstraints ( __ $(ConstructorConstraint) )? #List }
+TypeParameterConstraints                  = { addSecondaryConstraints ( __ "," __ $(ConstructorConstraint) )? #List }
                                           / { $(ConstructorConstraint) #List }
-                                          / { $(PrimaryConstraint) __ addSecondaryConstraints ( __ $(ConstructorConstraint) )? #List }
-                                          / { $(PrimaryConstraint) ( __ $(ConstructorConstraint) )? #List }
+                                          / { $(PrimaryConstraint) __ "," __ addSecondaryConstraints ( __ "," __ $(ConstructorConstraint) )? #List }
+                                          / { $(PrimaryConstraint) ( __ "," __ $(ConstructorConstraint) )? #List }
 PrimaryConstraint                         = TypeName
                                           / { "class" #ClassConstraint }
                                           / { "struct" #StructConstraint }
-addSecondaryConstraints                   = $(SecondaryConstraint) ( __ $(SecondaryConstraint) )*
+addSecondaryConstraints                   = $(SecondaryConstraint) ( __ "," __ $(SecondaryConstraint) )*
 SecondaryConstraint                       = TypeName
                                           / TypeParameter
 ConstructorConstraint                     = { "new" __ "(" __ ")" #ConstructorConstraint }
@@ -674,20 +749,19 @@ ClassMemberDeclaration                    = ConstantDeclaration
                                           / DestructorDeclaration
                                           / StaticConstructorDeclaration
                                           / TypeDeclaration
-ConstantDeclaration                       = { ( $(ConstantModifierAndAttributes) __ )? "const" __ $(Type) __ $({ $(ConstantDeclarator) #List }) __ ";" #ConstDeclStmt }
+ConstantDeclaration                       = { ( $(ConstantModifierAndAttributes) __ )? "const" __ $(Type) __ $(ConstantDeclarators) __ ";" #ConstDeclStmt }
 ConstantModifierAndAttributes             = { ( addAttributes __ )? ( $(ConstantModifier) __ )* #List }
 ConstantModifier                          = { ("new" / "public" / "protected" / "internal" / "private") #Text }
 FieldDeclaration                          = { ( $(FieldModifierAndAttributes) __ )? $(Type) __ $(LocalVariableDeclarators) __ ";" #VarDeclStmt }
 FieldModifierAndAttributes                = { ( addAttributes __ )? ( $(FieldModifier) __ )* #List }
 FieldModifier                             = ConstantModifier
-                                          / { ("static" / "readonly" / "volatile") #Text }
+                                          / { ("static" / "readonly" / "volatile" / "unsafe") #Text }
 MethodDeclaration                         = { $(MethodModifierAndAttributes) __ <on AwaitKeyword addMethodDecl> }
 addMethodDecl                             = $(ReturnType) __ $(MemberName) __ ( $(TypeParameterList) __ )? "(" __ ( $(FormalParameterList) __ )? ")" __ ( $(TypeParameterConstraintsClauses) __ )? $(MethodBody) #FuncDecl
 MethodModifierAndAttributes               = { ( addAttributes __ )? ( $(MethodModifier) __ )* $({ "partial" #Text })? #List }
 MethodModifierAndAttributesAsync          = { ( addAttributes __ )? ( $(MethodModifier) __ )* $({ "async" #Text }) ( __ $(MethodModifier) )* ( __ $({ "partial" #Text }) )? #List }
 MethodModifier                            = PropertyModifier
-                                          / { "async" #Text }
- // FIXME: remove this line 
+                                          / { "async" #Text } // FIXME: remove this line
 ReturnType                                = { $({ "void" #Name }) #Type }
                                           / Type
 MemberName                                = { $(Left1TypeName) __ "." __ $(Identifier) #Field }
@@ -706,7 +780,7 @@ ParameterArray                            = { ( $(Attributes) __ )? "params" __ 
 PropertyDeclaration                       = { ( $(PropertyModifierAndAttributes) __ )? $(Type) __ $(MemberName) __ $(AccessorDeclaration) #Property }
 PropertyModifierAndAttributes             = { ( addAttributes __ )? ( $(PropertyModifier) __ )* #List }
 PropertyModifier                          = ConstantModifier
-                                          / { ("static" / "virtual" / "sealed" / "override" / "abstract" / "extern") #Text }
+                                          / { ("static" / "virtual" / "sealed" / "override" / "abstract" / "extern" / "unsafe") #Text }
 AccessorDeclaration                       = { "{" __ $(GetAccessorDeclaration) __ ( $(SetAccessorDeclaration) __ )? "}" #List }
                                           / { "{" __ $(SetAccessorDeclaration) __ ( $(GetAccessorDeclaration) __ )? "}" #List }
 GetAccessorDeclaration                    = { ( $(AccessorModifierAndAttributes) __ )? "get" __ $(MethodBody) #Getter }
@@ -723,7 +797,7 @@ IndexerDeclarator                         = ThisAccess
                                           / { $(Identifier) __ "." __ $(ThisAccess) #Field }
 OperatorDeclaration                       = { ( $(OperatorModifierAndAttributes) __ )? addOperatorDeclarator __ $(MethodBody) #Operator }
 OperatorModifierAndAttributes             = { ( addAttributes __ )? ( $(OperatorModifier) __ )* #List }
-OperatorModifier                          = { ("public" / "static" / "extern") #Text }
+OperatorModifier                          = { ("public" / "static" / "extern" / "unsafe") #Text }
 addOperatorDeclarator                     = addUnaryOperatorDeclarator
                                           / addBinaryOperatorDeclarator
                                           / addConversionOperatorDeclarator
@@ -732,23 +806,24 @@ OperatorParameter                         = { $(Type) __ $(Identifier) #Paramete
 OverloadableUnaryOperator                 = { ("+" / "-" / "!" / "~" / "++" / "--" / "true" / "false") #Name }
 addBinaryOperatorDeclarator               = $(Type) __ "operator" __ $(OverloadableBinaryOperator) __ "(" __ $({ $(OperatorParameter) __ "," __ $(OperatorParameter) #List }) __ ")"
 OverloadableBinaryOperator                = { ("+" / "-" / "*" / "/" / "%" / "&" / "|" / "^" / "<<" / ">>" / "==" / "!=" / ">" / "<" / ">=" / "<=") #Name }
-addConversionOperatorDeclarator           = ("im" / "ex") "plicit" __ "operator" __ $(Type) __ "(" __ $({ $(OperatorParameter) #List }) __ ")"
+addConversionOperatorDeclarator           = ("implicit" / "explicit") __ "operator" __ $(Type) __ "(" __ $({ $(OperatorParameter) #List }) __ ")"
 ConstructorDeclaration                    = { ( $(ConstructorModifierAndAttributes) __ )? addConstructorDeclarator __ $(MethodBody) #FuncDecl }
 ConstructorModifierAndAttributes          = { ( addAttributes __ )? ( $(ConstructorModifier) __ )* #List }
-ConstructorModifier                       = { ("public" / "protected" / "internal" / "private" / "extern") #Text }
+ConstructorModifier                       = { ("public" / "protected" / "internal" / "private" / "extern" / "unsafe") #Text }
 addConstructorDeclarator                  = $(Identifier) __ "(" __ ( $(FormalParameterList) __ )? ")" ( __ $({ $(ConstructorInitializer) #List }) )?
 ConstructorInitializer                    = ":" __ { ($({ "base" #Super }) / $(ThisAccess)) __ $(FunctionStyleArgList) #Apply }
 StaticConstructorDeclaration              = { ( $(StaticConstructorModifierAndAttributes) __ )? $(Identifier) __ "(" __ ")" __ $(MethodBody) #FuncDecl }
 StaticConstructorModifierAndAttributes    = { ( addAttributes __ )? ( $(StaticConstructorModifier) __ )* #List }
-StaticConstructorModifier                 = { ("static" / "extern") #Text }
+StaticConstructorModifier                 = { ("static" / "extern" / "unsafe") #Text }
 DestructorDeclaration                     = { ( $(DestructorModifierAndAttributes) __ )? $(DestructorIdentifier) __ "(" __ ")" __ $(MethodBody) #FuncDecl }
 DestructorModifierAndAttributes           = { ( addAttributes __ )? ( $(DestructorModifier) __ )? #List }
-DestructorModifier                        = { "extern" #Text }
+DestructorModifier                        = { ("extern" / "unsafe") #Text }
 
 // B.2.8 Structs
 StructDeclaration                         = { ( $(StructModifierAndAttributes) __ )? "struct" __ $(Identifier) __ ( $(TypeParameterList) __ )? ( $(StructInterfaces) __ )? ( $(TypeParameterConstraintsClauses) __ )? $(StructBody) ( __ ";" )? #Struct }
 StructModifierAndAttributes               = { ( addAttributes __ )? ( $(StructModifier) __ )* $({ "partial" #Text })? #List }
 StructModifier                            = ConstantModifier
+                                          / { "unsafe" #Text }
 StructInterfaces                          = ":" __ { $(TypeName) ( __ "," __ $(TypeName) )* #List }
 StructBody                                = { "{" ( __ $(StructMemberDeclaration) )* __ "}" #List }
 StructMemberDeclaration                   = ConstantDeclaration
@@ -761,6 +836,7 @@ StructMemberDeclaration                   = ConstantDeclaration
                                           / ConstructorDeclaration
                                           / StaticConstructorDeclaration
                                           / TypeDeclaration
+                                          / FixedSizeBufferDeclaration
 
 // B.2.9 Arrays
 ArrayInitializer                          = { "{" __ ( addVariableInitializerList __ )? "}" #Array }
@@ -771,7 +847,7 @@ VariableInitializer                       = Expression
 
 // B.2.10 Interfaces
 InterfaceDeclaration                      = { ( $(StructModifierAndAttributes) __ )? "interface" __ $(Identifier) __ ( $(VariantTypeParameterList) __ )? ( $(StructInterfaces) __ )? ( $(TypeParameterConstraintsClauses) __ )? $(InterfaceBody) ( __ ";" )? #Interface }
-VariantTypeParameterList                  = { "<" __ $(VariantTypeParameterWithAttribute) ( __ $(VariantTypeParameterWithAttribute) )* __ ">" #List }
+VariantTypeParameterList                  = { "<" __ $(VariantTypeParameterWithAttribute) ( __ "," __ $(VariantTypeParameterWithAttribute) )* __ ">" #List }
 VariantTypeParameterWithAttribute         = { ( $(Attributes) __ )? $(TypeParameter) #Parameter }
 VariantTypeParamModifier                  = { ( addAttributes __ )? ( addVarianceAnnotation __ )? #List }
 addVarianceAnnotation                     = $({ "in" #Text })
@@ -799,15 +875,19 @@ EnumBody                                  = { "{" __ $(EnumMemberDeclaration) ( 
 EnumMemberDeclaration                     = { ( $(Attributes) __ )? $(Identifier) __ ( $(DefaultArgument) __ )? #Parameter }
 
 // B.2.12 Delegates
-DelegateDeclaration                       = { ( $(ConstantModifierAndAttributes) __ )? "delegate" __ $(ReturnType) __ $(Identifier) __ ( $(VariantTypeParameterList) __ )? "(" __ ( $(FormalParameterList) __ )? ")" __ ( $(TypeParameterConstraintsClauses) __ )? ";" #Delegate }
+DelegateDeclaration                       = { ( $(DelegateModifierAndAttributes) __ )? "delegate" __ $(ReturnType) __ $(Identifier) __ ( $(VariantTypeParameterList) __ )? "(" __ ( $(FormalParameterList) __ )? ")" __ ( $(TypeParameterConstraintsClauses) __ )? ";" #Delegate }
+DelegateModifierAndAttributes             = { ( addAttributes __ )? ( $(DelegateModifier) __ )* #List }
+DelegateModifier                          = ConstantModifier
+                                          / { "unsafe" #Text }
 
 // B.2.13 Attributes
-GlobalAttributes                          = <on GlobalAttributeFlag { addAttributes #List }>
-Attributes                                = <on !GlobalAttributeFlag { addAttributes #List }>
+GlobalAttributes                          = { $(GlobalAttributeSection) ( __ $(GlobalAttributeSection) )* #List }
+Attributes                                = { addAttributes #List }
 addAttributes                             = $(AttributeSection) ( __ $(AttributeSection) )*
+GlobalAttributeSection                    = { "[" __ $(GlobalAttributeTarget) __ ":" __ $(AttributeList) ( __ "," )? "]" #AttributeSection }
 AttributeSection                          = { "[" __ ( $(AttributeTarget) __ ":" __ )? $(AttributeList) ( __ "," )? "]" #AttributeSection }
-AttributeTarget                           = !<if GlobalAttributeFlag> { ("field" / "event" / "method" / "param" / "property" / "return" / "type") #Text }
-                                          / <if GlobalAttributeFlag> { ("assembly" / "module") #Text }
+GlobalAttributeTarget                     = { ("assembly" / "module") #Text }
+AttributeTarget                           = { ("field" / "event" / "method" / "param" / "property" / "return" / "type") #Text }
 AttributeList                             = { $(Attribute) ( __ "," __ $(Attribute) )* #List }
 Attribute                                 = { $(TypeName) ( __ $(AttributeArguments) )? #Attribute }
 AttributeArguments                        = { "(" __ ( addPositionalArgumentList __ )? ( addNamedArgumentList __ )? ")" #List }
@@ -816,6 +896,29 @@ PositionalArgument                        = { $(Identifier) __ $(Expression) #As
                                           / Expression
 addNamedArgumentList                      = $(NamedArgument) ( __ "," __ $(NamedArgument) )*
 NamedArgument                             = { $(Identifier) __ "=" __ $(Expression) #Assign }
+
+//--------------------------------------------------
+// B.3 Grammar extensions for unsafe code
+//--------------------------------------------------
+UnsafeStatement                           = { "unsafe" __ $(Block) #Unsafe }
+FixedStatement                            = { "fixed" __ "(" __ addFixedPointerDeclarator __ ")" __ $(EmbeddedStatement) #Fixed }
+addFixedPointerDeclarator                 = $(PointerType) __ $(FixedPointerDeclarators)
+FixedPointerDeclarators                   = { $(FixedPointerDeclarator) ( __ "," __ $(FixedPointerDeclarator) )* #List }
+FixedPointerDeclarator                    = { $(Identifier) __ "=" __ $(Expression) #VarDecl }
+PointerType                               = SimpleType {$ __ (addNullableSuffix / addArraySuffix / addPointerSuffix &( __ "*" )) }* {$ __ addPointerSuffix }
+                                          / VoidPointerType
+addPointerSuffix                          = $({ `Pointer` #Name }) "*" #Type
+VoidPointerType                           = { $({ "void" #Name }) #Type } {$ __ addPointerSuffix }
+PointerMemberAccessExpression             = { $(PrimaryExpression) __ "->" __ $(SimpleName) #PointerMemberAccess }
+addPointerMemberAccessOperator            = "->" __ $(SimpleName) #PointerMemberAccess
+addPointerIndirectionOperator             = "*" #PointerIndirection
+addAddressOfOperator                      = "&" #AddressOf
+FixedSizeBufferDeclaration                = { ( $(FixedSizeBufferModifierAndAttributes) __ )? "fixed" __ $(Type) __ $(FixedSizeBufferDeclarators) __ ";" #FixedSizeBuffer }
+FixedSizeBufferModifierAndAttributes      = { ( addAttributes __ )? ( $(FixedSizeBufferModifier) __ )* #List }
+FixedSizeBufferModifier                   = StructModifier
+FixedSizeBufferDeclarators                = { $(FixedSizeBufferDeclarator) ( __ $(FixedSizeBufferDeclarator) )* #List }
+FixedSizeBufferDeclarator                 = { $(Identifier) __ "[" __ $(ConstantExpression) __ "]" #BufferSize }
+StackAllocInitializer                     = { "stackalloc" __ $(Type) __ "[" __ $(Expression) __ "]" #StackAlloc }
 
 example LambdaExpression '''
 x => x*x
@@ -826,5 +929,3 @@ from person in people where person.age < 20 select person.name
 example DeclarationStatement '''
 var names = from person in people select person.name;
 '''
-
-// formatted by $ nez format
