@@ -1,0 +1,719 @@
+/**
+ * CoffeeScript Grammar
+ *
+ * Based on grammar from grammar.coffee[1] and lexer.coffee[2]
+ *
+ * [1] https://github.com/jashkenas/coffeescript/blob/master/src/grammar.coffee
+ * [2] https://github.com/jashkenas/coffeescript/blob/master/src/lexer.coffee
+ *
+ * Authors:
+ *   Sudo Takeru (https://github.com/takerusu)
+ *   Kimio Kuramitsu (https://github.com/kkuramitsu)
+ */
+
+Root = {NL* (Body) NL* #Source} !.
+Body = $(Line) (NL <match Indent> $(Line) / SKIP)*
+
+NL
+  = '\n'
+  / '\r\n'
+  / '\r'
+
+SKIP
+  = &(NL _ NL) NL _
+  / NL _ $(Comment)
+
+_ = WS*
+__ = WS* (NL <match Indent> WS+)?
+WS = [ \t]
+
+Indent = <match Indent> WS+
+
+W = [a-zA-Z0-9_]
+
+"return" = 'return' !W
+"break" = 'break' !W
+"continue" = 'continue' !W
+"if" = 'if' !W
+"unless" = 'unless' !W
+"for" = 'for' !W
+"by" = 'by' !W
+"switch" = 'switch' !W
+"while" = 'while' !W
+"until" = 'until' !W
+"loop" = 'loop' !W
+"class" = 'class' !W
+"debugger" = 'debugger' !W
+"undefined" = 'undefined' !W
+"null" = 'null' !W
+"true" = 'true' !W
+"yes" = 'yes' !W
+"on" = 'on' !W
+"false" = 'false' !W
+"no" = 'no' !W
+"off" = 'off' !W
+"this" = 'this' !W
+"extends" = 'extends' !W
+"own" = 'own' !W
+"in" = 'in' !W
+"of" = 'of' !W
+"new" = 'new' !W
+"typeof" = 'typeof' !W
+"delete" = 'delete' !W
+"do" = 'do' !W
+"super" = 'super' !W
+"when" = 'when' !W
+"else" = 'else' !W
+"yield" = 'yield' !W
+"instanceof" = 'instanceof' !W
+"throw" = 'throw' !W
+"try" = 'try' !W
+"catch" = 'catch' !W
+"finally" = 'finally' !W
+"then" = 'then' !W
+"and" = 'and' !W
+"or" = 'or' !W
+"is" = 'is' !W
+"isnt" = 'isnt' !W
+"not" = 'not' !W
+
+
+TERMINATOR = ';'
+
+Line
+  = Expression
+  / Statement
+  / YieldReturn
+
+Statement
+  = Return
+  / Comment
+  / STATEMENT
+
+STATEMENT
+  = {"break" #Break}
+  / {"continue" #Continue}
+
+Yield
+  = {"yield" (_ "from" #YieldFrom / #Yield) $(_ Expression)? }
+
+Block
+  = { <block SKIP* NL <symbol Indent> Body > #Block}
+
+Identifier
+  = {(!KEYWORD (![0-9] [$A-Za-z0-9_\x7f-\x80]+)) #Name}
+
+KeywordIdentifier
+  = {KEYWORD #Name}
+
+KEYWORD
+  = JS_KEYWORD
+  / COFFEE_KEYWORD
+
+JS_KEYWORD
+  = "true" / "false" / "null" / "this" / "new" / "delete" / "typeof" / "in" / "instanceof"
+  / "return" / "throw" / "break"/ "continue" / "debugger" / "yield" / "if" / "else" / "switch"
+  / "for" / "while" / "do" / "try" / "catch" / "finally" / "class" / "extends" / "super"
+
+COFFEE_KEYWORD
+  = "undefined" / "then" / "unless" / "until" / "loop" / "of" / "by" / "when" / "and" / "or" / "isnt" / "is" / "not"
+
+AlphaNumeric
+  = {NUMBER #Float}
+  / String
+
+NUMBER
+  = '0b' [01]+
+  / '0o' [0-7]+
+  / '0x' [0-9a-fA-F]+
+  / [0-9]+ ('.' [0-9]+)? ('e' ([+-])? [0-9]+)?
+  / '.' [0-9]+ ('e' ([+-])? [0-9]+)?
+
+String
+  = '"""' {$(StringInterpolation / {(!('"""' / '#{') .)+ #String})* #Interpolation} '"""'
+  / ['][']['] {(!([']['][']) .)* #String} [']['][']
+  / '"' {$((StringInterpolation) / {((!('"' / '\\' / '#{') . / '\\' ESCAPE_SEQUENCE)+ ) #String})* #Interpolation} '"'
+  / ['] {((!(['] / '\\') .) / '\\' ESCAPE_SEQUENCE)* #String} [']
+
+StringInterpolation
+  = '#{' Expression '}'
+
+ESCAPE_SEQUENCE
+  = '\\'
+  / ["'bfnrtv]
+  / [0-7] [0-7] [0-7]
+  / [xX] [0-9a-fA-F] [0-9a-fA-F]
+  / [uU] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F]
+  / .
+
+LINE_TERMINATOR
+  = [\n\r\u2028\u2029]
+
+Regex
+  = {'/' (!'/' REGEX_BODY ) '/' REGEX_FLAGS #RegExp}
+
+REGEX_BODY
+  = REGEX_FIRST_CHAR REGEX_CHAR*
+
+REGEX_FIRST_CHAR
+  = REGEX_BACKSLASH_SEQUENCE
+  / ![*\\/\x5b] REGEX_NON_TERMINATOR
+  / REGEX_CLASS
+
+REGEX_CHAR
+  = '*'
+  / REGEX_FIRST_CHAR
+
+REGEX_BACKSLASH_SEQUENCE
+  = '\\' REGEX_NON_TERMINATOR
+
+REGEX_NON_TERMINATOR
+  = !LINE_TERMINATOR .
+
+REGEX_CLASS
+  = '[' REGEX_CLASS_CHAR* ']'
+
+REGEX_CLASS_CHAR
+  = ![\x5d\\] REGEX_NON_TERMINATOR
+  / REGEX_BACKSLASH_SEQUENCE
+
+REGEX_FLAGS = [gimsy]*
+
+Literal
+  = AlphaNumeric
+  / JS
+  / Regex
+  / {"debugger" #Debugger}
+  / {"undefined" #Undefined}
+  / {"null" #Null}
+  / BOOL
+
+JS
+  = '`' {(!('`') .)* #JavaScript} '`'
+
+BOOL
+  = {("true" / "yes" / "on") #True}
+  / {("false" / "no" / "off") #False}
+
+Expression
+  /*= { $(InnerExpression) #BlockExpression }*/
+  = InnerExpression
+
+InnerExpression
+  = Code
+  / Try
+  / Throw
+  / PostIfExpression
+
+Code
+  = { $param(Params) _ FuncGlyph $body(Block / _ Expression)?}
+  / {FuncGlyph $(Block / _ Expression)?}
+
+FuncGlyph
+  = '->' #Lambda
+  / '=>' #ChangeThisLambda
+
+Params
+  = {'(' (_ ParamList)? _ NL? ')' #List}
+
+ParamList
+  = $(Param) (SKIP / _ ',' _ $(Param) / (_ ',')?  _ TERMINATOR _ $(Param) / (_ ',')? NL <match Indent> $(Param) / (_ ',')? <block NL <symbol Indent> ParamList>)*
+  / <block NL <symbol Indent> ParamList >
+
+Param
+  = { $(ParamVar) '...' #VarParam}
+  / { $(ParamVar) _ '=' _ $(Expression) #DefaultParam }
+  / ParamVar
+  / {'...' #VariableParam}
+
+ParamVar
+  = Identifier
+  / ThisProperty
+  / Array
+  / Object
+
+PostIfExpression
+  = Statement {$ $cond({_ IF _ $(IfExpression)}) #PostIfs}+
+  / IfExpression {$ $cond({_ IF _ $(IfExpression)}) #PostIf}*
+
+IfExpression
+  = { IF _ $cond(ForExpression) _ "then" _ $then(ForExpression) ( _ "else" _ $else(ForExpression))? }
+  / {$(IfBlock) (NL <match Indent> "else" $else(Block))? #If}
+  / ForExpression
+
+IfBlock
+  = {IF _ $cond(ForExpression) $then(Block) ( NL <match Indent> "else" _ IF _ $(ForExpression) $(Block))*}
+
+IF
+  = "if" #If
+  / "unless" #Unless
+
+ForExpression
+  = {$(Statement) _ $(ForBody) #For}
+  / {$(SwitchExpression) _ $(ForBody) #For}
+  / {$(ForBody) _ $(Block) #For}
+  / SwitchExpression
+
+ForBody
+  = {"for" _ $(Range) ( _ "by" _ $(SwitchExpression))? #ForBody}
+  / {$(ForStart) _ $(ForSource) #For}
+
+SwitchExpression
+  = {"switch" $cond( _ WhileExpression)? $body(Whens) #Switch}
+  / WhileExpression
+
+Whens
+  = {<block NL <symbol Indent> $(When) (NL <match Indent> $(When) / &(NL NL)  NL)* ( NL <match Indent> "else" $(Block))? > #List}
+
+When
+  = {"when" _ $cond(SimpleArgs) $body(Block) ( _ TERMINATOR)? #When}
+
+WhileSource
+  = {("while" #While / "until" #Until) _ $cond(LoopExpression) ( _ "when" _ $(LoopExpression))?}
+
+WhileExpression
+  = {$(WhileSource) _ $(Block) #While}
+  / {$(Statement) _ $(WhileSource) #While}
+  / {$(LoopExpression) _ $(WhileSource) #While}
+  / LoopExpression
+
+LoopExpression
+  = {"loop" _ $(Block) #Loop}
+  / {"loop" _ $(ClassExpression) #Loop}
+  / ClassExpression
+
+ClassExpression
+  = {"class" $(_ SimpleAssignable)? ( _ "extends" _ $(SimpleAssignable))? $(Block)? #Class}
+  / ForEachExpression
+
+ForEachExpression
+  = {$(ForStart) _ $(ForSource) $(Block) #For}
+  / AssignExpression
+
+ForStart
+  = {"for" (_ "own" #ForOwn / #For) _ $(ForVariables)}
+
+ForVariables
+  = {$(ForValue) (_ ',' _ $(ForValue))* #List}
+
+ForValue
+  = Identifier
+  / ThisProperty
+  / Array
+  / Object
+
+ForSource
+  = {FOR _ $(AssignExpression) _ "when" _ $(AssignExpression) (_ "by" _ $(AssignExpression))?}
+  / {FOR _  $(AssignExpression) _ "by" _ $(AssignExpression) (_ "when" _ $(AssignExpression))?}
+  / {FOR _ $(AssignExpression)}
+
+FOR
+  = "in" #In
+  / "of" #Of
+
+AssignExpression
+  = {$left(Assignable) _ ('=' #Assign / COMPOUND_ASSIGN) (SKIP)* NL <block <symbol Indent> $right(Expression)>}
+  / {$left(Assignable) _ ('=' #Assign / COMPOUND_ASSIGN) _ $right(Expression)}
+  / ExtendsExpression
+
+ExtendsExpression
+  = {$(SimpleAssignable) _ "extends" _ $(LogicalOperation)}
+  / LogicalOperation
+
+LogicalOperation
+  = CompareExpression {$left _ LOGIC __ $right(CompareExpression)}*
+
+CompareExpression
+  = RelationalExpression {$left _ COMPARE __ $right(RelationalExpression)}*
+
+RelationalExpression
+  = ShiftExpression {$left _ RelationalExpressionInner}*
+
+RelationalExpressionInner
+= "not" _ RELATION __ $({$right(ShiftExpression) #Not})
+/ RELATION __ $right(ShiftExpression)
+
+ShiftExpression
+  = AddictiveExpression {$left _ SHIFT __ $right(AddictiveExpression)}*
+
+AddictiveExpression
+  = MathExpression {$left _ ('+' #Add / '-' #Sub) __ $right(MathExpression)}*
+
+MathExpression
+  = UnaryExpression {$left _ MATH __ $right(UnaryExpression)}*
+
+QualifiedName
+  = Identifier {$prefix '.' $name(Identifier) #QualifiedName }*
+
+UnaryExpression
+  = {UNARY _ $expr(UnaryExpression)}
+  / {'import' _ $name(QualifiedName) #Import} //debug
+  / { (UNARY_MATH / '+' !('+') #Plus / '-' !('-') #Minus) $expr(UnaryExpression)}
+  / ExistentialExpression
+
+ExistentialExpression
+  = {$(PostfixExpression) '?' #CheckExist}
+  / PostfixExpression
+
+PostfixExpression
+  = {('++' #PrefixInc / '--' #PrefixDec) $(SimpleAssignable)}
+  / {$(SimpleAssignable) ('++' #SuffixInc / '--' #SuffixDec)}
+  / Return
+  / Invocation
+
+Assignable
+  = Array
+  / Object
+  / SimpleAssignable {$recv Accessor #Field}*
+
+SimpleAssignable
+  = Identifier
+  / Accessible Accessor
+  / ThisProperty
+
+Accessible
+  = Array
+  / Object
+  / Literal
+  / Parenthetical
+  / Range
+  / This
+  /// Invocation
+
+Invocation
+  = MemberExpression {$recv (Accessor /_ $(Arguments) #Apply) }+
+  / {"super" $(_ Arguments)? #SuperApply}
+  / Value {$recv Accessor }*
+  /// { (UNARY_MATH / '+' #Plus / '-' #Minus) _ $(UnaryExpression)}
+
+Arguments
+  = { '(' (_ WrappedArgList (_ ',')?)? _ (NL <match Indent>)? ')' #List}
+  / { UnwrappedArgList (_ ',')? #List}
+  / { NL <symbol Indent> UnwrappedAssignList (_ ',')? #List}
+
+ListIndent
+  = <match ListIndent> WS+
+
+WrappedArgList
+  = $(Arg) (SKIP / _ ',' _ $(Arg) / (_ ',')?  _ TERMINATOR _ $(Arg) / (_ ',')? NL <match Indent> $(Arg) / (_ ',')? <block NL <symbol Indent> WrappedArgList>)*
+  / <block NL <symbol Indent> WrappedArgList >
+
+UnwrappedArgList
+  = $(Arg) ( _ ',' _ $(Arg) / (_ ',')?  _ TERMINATOR _ $(Arg) )*
+
+Arg
+  = {'...' #Expantion}
+  / Splat
+  / Expression
+  / Value
+
+Splat
+  = {$(Expression) '...' #Splat}
+
+MemberExpression
+  = MemberExistentialExpression {$ Accessor}+
+  / { $(ThisProperty / Identifier) '?' #CheckExistance}
+  / ThisProperty
+  / Identifier
+
+MemberExistentialExpression
+  = { $(Value) '?' #CheckExistance}
+  / Value
+
+Accessor
+  = '.' $name(Identifier / KeywordIdentifier) #Field
+  / '?.' $name(Identifier / KeywordIdentifier) #CheckExistance
+  / '::' $name(Identifier / KeywordIdentifier)
+  / '?::' $name(Identifier / KeywordIdentifier)
+  / '::'
+  / $param(Index) #Indexer
+
+Index
+  = {('?' #CheckExistIndex / #Index) '[' $(IndexValue) ']'}
+
+IndexValue
+  = Slice
+  / Expression
+
+Value
+  = Literal
+  / Parenthetical
+  / Assignable
+  / Range
+  / This
+
+Parenthetical
+  = {'(' _ Body _ ')' }
+
+Return
+  = {"return" $(_ IfExpression)? #Return}
+
+YieldReturn
+  = {"yield" $(_ IfExpression)? #Yield}
+
+Comment
+  = {'###' (!'#' .)* '###' #Comment}
+  / {'#' ((!('##') (!'\n'.)(!'\n'.)) / '###') (!'\n'.)* #Comment}
+  / {'#' (!'\n' .)? #Comment}
+
+This
+  = "this"
+  / '@'
+
+Object
+  = {'{' ( _ AssignList)? (_ ',')? (NL <match Indent> / _) '}' #Object}
+  / { UnwrappedAssignList (_ ',')?  #Object}
+
+AssignList
+  = $(AssignObj) (SKIP / _ ',' _ $(AssignObj) / (_ ',')? _ TERMINATOR _ $(AssignObj) / (_ ',')? NL <match Indent> $(AssignObj) / (_ ',')? <block NL <symbol Indent> AssignList> )*
+  / <block NL <symbol Indent> AssignList >
+
+UnwrappedAssignList
+  = ($(UnwrappedAssignObj) (SKIP / _ ',' _ $(UnwrappedAssignObj) / (_ ',')? _ TERMINATOR _ $(UnwrappedAssignObj) / (_ ',')? NL (<match Indent> <match ListIndent> $(UnwrappedAssignObj) / UnwrappedAssignList  ','?) )*)
+
+AssignObj
+  = {$(ObjAssignable) $(_ ':' _ Expression)? #Property}
+  /// {$(SimpleObjAssignable) _ '=' _ $(Expression)}
+
+UnwrappedAssignObj
+  = {$(ObjAssignable) $(_ ':' _ Expression) #Property}
+  /// {$(SimpleObjAssignable) _ '=' _ $(Expression)}
+
+SimpleObjAssignable
+  = Identifier
+  / ThisProperty
+
+ObjAssignable
+  = SimpleObjAssignable
+  / AlphaNumeric
+  / {KEYWORD #Name}
+
+ThisProperty
+  = {'@' $(Identifier) #This}
+
+Array
+  = {'[' ( _ WrappedArgList (_',')?)? (NL <match Indent> / _) ']' #Array}
+
+RangeDots
+  = '...' #Range
+  / '..' #Range
+
+Range
+  = {'[' $left(Expression) RangeDots $right(Expression) ']'}
+
+Slice
+  = {$left(Expression)? RangeDots $right(Expression)?}
+
+SimpleArgs
+  = (Expression) {$ $(_ ',' _ Expression)* #List}
+
+Try
+  = {"try" $(Block) $(NL <match Indent> Catch)? $(NL <match Indent> "finally" Block)? #Try}
+
+Catch
+  = {"catch" $(_ Identifier / _ Object)? $(Block) #Catch}
+
+Throw
+  = {"throw" _ $(Expression) #Throw}
+
+UNARY
+  = "new" #New
+  / "typeof" #TypeOf
+  / "delete" #Delete
+  / "do" #Do
+
+UNARY_MATH
+  = ('!' / "not" _) #LogicalNot
+  / '~' #BitwiseNot
+
+MATH
+  = '*' #Mul
+  / '//' #IntDiv
+  / '%%' #IntMod
+  / '/' #Div
+  / '%' #Mod
+
+SHIFT
+  = '<<' #LeftShift
+  / '>>>' #LogicalRightShift
+  / '>>' #RightShift
+
+COMPARE
+  = ('==' / "is") #StrictEquals
+  / ('!=' / "isnt") #StrictNotEquals
+  / '<' #LessThan
+  / '>' #GreaterThan
+  / '<=' #LessThanEquals
+  / '>=' #GreaterThanEquals
+
+LOGIC
+  = ('&&' / "and") #LogicalAnd
+  / ('||' / "or") #LogicalOr
+  / '&' #BitwiseAnd
+  / '|' #BitwiseOr
+  / '^' #BitwiseXor
+
+RELATION
+  = 'instanceof' #InstanceOf
+  / 'in' #In
+  / 'of' #JSIn
+
+COMPOUND_ASSIGN
+  = '-=' #AssignSub
+  / '+=' #AssignAdd
+  /'/=' #AssignDiv
+  /'*=' #AssignMul
+  /'%=' #AssignMod
+  /'||=' #AssignOr
+  /'&&=' #AssignAnd
+  /'?=' #AssignCheckExist
+  /'<<=' #AssignLeftShift
+  /'>>=' #AssignRightShift
+  /'>>>=' #AssignLogicalRightShift
+  /'&=' #AssignBitwiseAnd
+  /'^=' #AssignBitwiseXOr
+  /'|=' #AssignBitwiseOr
+  /'**=' #AssignIntMul
+  /'//=' #AssignIntDiv
+  /'%%=' #AssignIntMod
+
+example Literal ~fe4ed84a25 1
+example Literal ~605e5589 'abc'
+example Literal ~d11799fc0 "abc#{1+2}def\n"
+example Literal ~605e5589c '''abc'''
+example Literal ~49928151e '''
+"""abc
+def
+ghi"""
+'''
+example Literal ~076c8f0ea `var a = 0;`
+example Literal ~18ebfb8 /abc\\n/g
+
+//example Code (a, b) -> 1
+example Root ~1b2504c9 a = 1 if true
+example Expression a = 1
+example Expression 1+2
+example Expression 1 +2
+example Expression 1 + 2
+example Expression 1 + 2 * -3
+example Expression {s: "text", n: 3}
+example Expression f(1) 2
+example Expression f(1).func 2
+example Expression f(1)?.func(2).field.func 3
+example Expression $('.account').attr class: 'active'
+example Expression num in [1, 2, 3]
+example Expression 1 == null && !false
+example Expression console.log "Hello, world!"
+example Expression p?(1, 2, 3)
+example Expression p? 1, 2, 3
+example Expression (a, b, c) => 1
+example Value class: 'activate'
+example Expression if friday then sue else jill
+example Line clapsHands()
+example Expression happy and knowsIt
+example Expression '''
+if happy and knowsIt
+  clapsHands()
+  chaChaCha()
+else
+  showIt()
+'''
+example Expression buy() while supply > demand
+example Expression '''
+math =
+  root:   Math.sqrt
+  square: square
+  cube:   (x) -> x * square x
+'''
+example Expression '''
+for i,value of hogehoge
+  1
+  console.log value
+'''
+
+example Expression '''
+class Klass
+  @staticVar: 0
+
+  utod :(a) ->
+    this.y < a.y
+
+'''
+
+
+example Expression @svg.setAttribute("width", @width + "px")
+example Expression path.style.stroke = "black"
+example Comment # comment
+example Expression rect.top + window.pageYOffset
+example Expression rect.top +window.pageYOffset
+example Expression option.through or option.loop
+
+example Root '''
+ret.value.push @plotPath(
+  1)
+'''
+
+example Root '''
+switch types[i]
+  when INT
+    ret = (1 + 2) * 3
+    break
+  when STRING
+    ret += "str"
+    break
+  else
+    break
+'''
+
+example Root ~8671eda97 '''
+try
+  throw new Error()
+catch e
+  console.log e
+finally
+  console.log "end"
+'''
+
+example Root '''
+if typeof p.lintToken is 'function'
+    e "'tokens' is required for 'lintToken'" unless p.tokens
+else if typeof p.lintLine isnt 'function' and
+      typeof p.lintAST isnt 'function'
+    e "Rules must implement lintToken, lintLine, or lintAST"
+'''
+
+example Root '''
+console.log(
+  2,;1
+  2,3
+  3
+    2...
+      4
+    2
+  1
+        1
+)
+'''
+
+example Root '''
+(
+  a,;b
+  c,d
+  e
+    f...
+      g = 3
+    h
+  i
+        j
+) -> 2
+'''
+
+example Root console.log 1 for [1..3]
+example Root '''
+if s?.length > 2 and 'enable' in s
+            for r in s[1..]
+                unless r in ['enable','disable']
+                    unless r of config and config[r].level in ['warn','error']
+                        disabled_initially.push r
+                        config[r] = { level: 'error' }
+'''
