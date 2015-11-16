@@ -105,6 +105,7 @@ TODO                               = !''
 "instanceof"                       = 'instanceof' !W _
 "int"                              = 'int' !W _
 "interface"                        = 'interface' !W _
+"let"                              = 'let' !W _
 "long"                             = 'long' !W _
 "native"                           = 'native' !W _
 "new"                              = 'new' !W _
@@ -331,14 +332,16 @@ ExplicitConstructorInvocation      = { $(TypeArguments)? $({ $(This) "(" _Argume
 
 //
 FunctionDeclaration                = { $anno(Modifiers)? "function" $name(Identifier) "(" $param(ParamList) ")" $type(":" TypeOrVoid)? $body(Block) #FuncDecl }
+                                   / { "let" $name(Identifier) $param(ParamList) "=" $body(LambdaBody) #FuncDecl}
                                    / { $anno(Modifiers)? ( $(TypeParameters) $anno(Modifiers)? )? $type(TypeOrVoid) $name(Identifier) "(" $param(ParamList) ")" $throws(Throws)? ($body(Block) / EOS) #FuncDecl }
 
 // Lambda
 LambdaExpression                   = { "function" $name(Identifier)? "(" $param(ParamList) ")" $type(":" TypeOrVoid)? $body(Block) #Lambda }
                                    / { $param(LambdaParameters) "->" $body(LambdaBody) #Lambda }
 LambdaParameters                   = Identifier / "(" ParamList ")"
-LambdaBody                         = !'{' Expression
+LambdaBody                         = !'{' { $(LambdaReturn) #Block}
                                    / Block
+LambdaReturn                       = { $expr(Expression) #Return }
 
 example FunctionDeclaration ~ae75e55 '''
 int fibo(int n) {
@@ -392,7 +395,7 @@ TypeParameter                      = { $anno(Modifiers) $(UnannoTypeParameter) #
 UnannoTypeParameter                = Identifier {$base "extends" $extends(ClassType) ( "&" $(ClassType) )* #TypeBound }?
 TypeParameters                     = { "<" $(TypeParameter) ( "," $(TypeParameter) )* ">" #TypeLists }
 TypeArguments                      = { "<" ( $(TypeArgument) ( "," $(TypeArgument) )* )? ">" #TypeArguments }
-TypeArgument                       = ReferenceType
+TypeArgument                       = TypeOrVoid
                                    / { $anno(Modifiers)? "?" #TWildCard } {$ ("extends" #UpperBound / "super" #LowerBound) $(ReferenceType) }?
 Void                               = { 'void' !W #VoidType } _
 TypeOrVoid                         = Type
