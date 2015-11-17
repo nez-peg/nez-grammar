@@ -35,6 +35,7 @@ HEX4                       = HEX HEX HEX HEX
 Name                       = { NAME #Name } _
 NAME                       = !DIGIT !( KEYWORD !W ) W+
 KEYWORD                    = 'auto'
+                           / 'asm'
                            / 'break'
                            / 'case'
                            / 'char'
@@ -74,7 +75,9 @@ KEYWORD                    = 'auto'
                            / '_stdcall'
                            / '__declspec'
                            / '__attribute__'
+                           / '__asm__'
                            / '__asm'
+                           / '__voratile__'
 "++"                       = '++' _
 "--"                       = '--' _
 "&"                        = '&' !'&' _
@@ -121,7 +124,9 @@ KEYWORD                    = 'auto'
 "}"                        = '}' _
 "->"                       = '->' _
 "enum"                     = 'enum' !W
+"asm"                      = 'asm' !W
 "__asm"                    = '__asm' !W
+"__asm__"                  = '__asm__' !W
 "case"                     = 'case' !W
 "default"                  = 'default' !W
 "if"                       = 'if' !W
@@ -156,6 +161,7 @@ KEYWORD                    = 'auto'
 "const"                    = 'const' !W _
 "restrict"                 = 'restrict' !W _
 "volatile"                 = 'volatile' !W _
+"__volatile__"             = '__volatile__' !W _
 "_Atomic"                  = '_Atomic' !W _
 
 "__declspec"               = '__declspec' !W _
@@ -232,14 +238,18 @@ int fibo(int n) {
 //==============
 TypeDef                    = { "typedef" _ $type(Type) _ $(TypeDefName) _ ( ',' _ $(TypeDefName) _ )* ";" #TypeDeclaration }
 TypeDefName                = { "*" $name(TypeDefName) #PointerName } _
-                           / <symbol TypeName> _ {$name "[" $size(ConstantExpression)? "]" #ArrayName / "(" $param(FunctionParamList) ")" #TFunc }*
+                           / TypeNameOrNest {$name "[" $size(ConstantExpression)? "]" #ArrayName / "(" $param(FunctionParamList) ")" #TFunc }*
+TypeNameOrNest             = <symbol TypeName> _
+                           / "(" TypeDefName ")"
 TypeName                   = { NAME #Name }
 VariableDeclaration        = { $(AnnotationList) $type(Type) $(InitDecl) ( "," $(InitDecl) )* ATTRIBUTE? ";" #Declaration }
                            / { $(AnnotationList) $type(Type) ( "=" $expr(Initializer) )? ( "," $(InitDecl) )* ATTRIBUTE? ";" #Declaration }
 InitDecl                   = { $name(VarName) ( "=" $expr(Initializer) )? #VarDecl } _
 InitDeclAssign             = { $name(VarName) "=" $expr(Initializer) #VarDecl } _
 VarName                    = { "*" $name(VarName) #PointerName } _
-                           / Name {$name "[" $size(ConstantExpression)? "]" #ArrayName / "(" $param(FunctionParamList) ")" #TFunc }*
+                           / NameOrNest {$name "[" $size(ConstantExpression)? "]" #ArrayName / "(" $param(FunctionParamList) ")" #TFunc }*
+NameOrNest                 = "(" VarName ")"
+                           / Name
 Initializer                = AssignmentExpression
                            / ArrayInitializer
 ArrayInitializer           = "{" { ( $(Initializer) ( "," $(Initializer) )* )? ","? #Array } "}"
@@ -354,6 +364,7 @@ Statement                  = Block
                            / { $label(Name) ":" #Label }
                            / TypeDef
                            / { $expr(Expression) ";" #ExpressionStatement }
+                           / { ("asm" / "__asm" / "__asm__") _ $({ ("volatile" / "__volatile__") #Volatile } _ )? "(" $(CString) ")" #Asm } ";"
                            / { #Empty } ";"
 example Block ~8909e9 '''
 {
@@ -425,6 +436,9 @@ case 1:
 default:
 	return false;
 }
+'''
+example Statement ~e6e0ae '''
+asm volatile("int3");
 '''
 
 //Expression
