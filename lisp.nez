@@ -1,0 +1,97 @@
+/*
+  Nez Lisp Grammar
+  Authors:
+    Tetsuro Matsumura (https://github.com/tetsurom/)
+*/
+File                            = __ { ( $(Expression) __ )+ #Source } EOT
+
+/* Code Layout (Whitespace) */
+SP                              = ( SPACE / LINE_TERMINATOR+ / COMMENT )+
+__                              = ( SPACE / LINE_TERMINATOR+ / COMMENT )*
+_                               = ( SPACE / MULTI_LINE_COMMENT_SINGLE_LINE )*
+SPACE                           = [ \t]
+LINE_TERMINATOR                 = [\n\r]
+COMMENT                         = MULTI_LINE_COMMENT
+                                / SINGLE_LINE_COMMENT
+MULTI_LINE_COMMENT              = '#|' ( !'|#' (MULTI_LINE_COMMENT / .) )* '|#'
+MULTI_LINE_COMMENT_SINGLE_LINE  = '#|' ( !( '|#' / LINE_TERMINATOR ) (MULTI_LINE_COMMENT_SINGLE_LINE / .) )* '|#'
+SINGLE_LINE_COMMENT             = ';' ( !LINE_TERMINATOR . )*
+EOT                             = !.
+
+/* Keyword */
+"t"                             = 't' !IDENTIFIER_PART
+"nil"                           = 'nil' !IDENTIFIER_PART
+"defun"                         = 'defun' !IDENTIFIER_PART
+OPERATOR                        = [+%/<>*=~^&|-]+
+
+/* Literal */
+DecimalInteger                  = { DECIMAL_INTEGER #Integer }
+FloatingPointNumber             = { DECIMAL_INTEGER? '.' DIGIT+ EXPONENT_PART? #Double }
+                                / { DECIMAL_INTEGER EXPONENT_PART #Double }
+DECIMAL_INTEGER                 = [1-9] DIGIT*
+                                / '0'
+DIGIT                           = [0-9]
+EXPONENT_PART                   = [eE] SIGN? DECIMAL_INTEGER
+SIGN                            = '+'
+                                / '-'
+String                          = '"' { ( !["] STRING_CHAR )* #String } '"'
+STRING_CHAR                     = !( '\\' / LINE_TERMINATOR ) .
+                                / '\\' ESCAPE_SEQUENCE
+ESCAPE_SEQUENCE                 = '\\'
+                                / ["abfnrtv]
+
+/* Identifier */
+Identifier                      = { IDENTIFIER #Name }
+IDENTIFIER                      = IDENTIFIER_START IDENTIFIER_PART*
+IDENTIFIER_START                = [a-zA-Z_]
+IDENTIFIER_PART                 = IDENTIFIER_START
+GlobalIdentifier                = { '*' IDENTIFIER '*' #Name }
+                                / DIGIT
+
+/* Expression */
+Expression                      = DefunExpression
+                                / CallExpression
+                                / Quote
+                                / String
+                                / Tee
+                                / Nil
+                                / FloatingPointNumber
+                                / DecimalInteger
+                                / FunctionReference
+                                / Identifier
+                                / GlobalIdentifier
+ExpressionList                  = '(' __ { ( $(Expression) ( SP $(Expression) )* )? #List } __ ')'
+DefunExpression                 = '(' __ { "defun" SP $(FunctionName) SP $(ExpressionList) SP $(FunctionBody) #FuncDecl } __ ')'
+FunctionName                    = { (OPERATOR / IDENTIFIER) #Name }
+FunctionBody                    = CallExpression
+                                / '(' __ { ( $(CallExpression) ( SP $(CallExpression) )* )? #Block } __ ')'
+CallExpression                  = '(' __ { $(FunctionName) ( SP $(Expression) )* #Apply } __ ')'
+Quote                           = '`' ExpressionList
+                                / '`' { $(Expression) #Quote }
+Tee                             = { "t" #True }
+Nil                             = { "nil" #Null }
+FunctionReference               = '#`' FunctionName
+
+example Expression ~14e3ad X
+example Expression ~64f650 *A*
+example Expression ~b2f2c9 1e+40
+example Expression ~1951c6 0
+example Expression ~fa5b3a t
+example Expression ~698aeb nil
+example Expression ~a2fe0a "hoge"
+example Expression ~4a1366 `Y
+example Expression ~a91c19 (+ 3 4)
+example Expression ~13df8b '''
+`(
+#| this is example of
+   multi line comment. |#
+  1 2
+)
+'''
+example Expression ~5a3440 '''
+(defun square (n)
+  ;this is comment.
+  (* n n)
+)
+'''
+
