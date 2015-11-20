@@ -6,7 +6,8 @@
   Author:
     Shun Honda (https://github.com/shun-honda)
 */
-File                                = { <def Indent _> ( NEWLINE / EOS / $(Statement) )* #Source } EOF
+File                                = { ( NEWLINE / EOS / $(Statement) )* #Source } EOF
+Indent                              = <match Indent> S+
 NEWLINE                             = '\r'? '\n'
                                     / '\r'
 S                                   = [ \t]
@@ -106,7 +107,7 @@ WithStatement                       = { 'with' ___ $(WithItemList) ___ ':' ___ $
 WithItemList                        = WithItem {$ ( ___ ',' ___ $(WithItem) )+ #List }?
 WithItem                            = Test {$ ___ 'as' ___ $(Expr) #As }?
 Suite                               = { $(SimpleStatement) #Block }
-                                    / NEWLINE ( _ EOS )* { <block ( <def Indent ( <match Indent> S+ )> $(Statement) ( <match Indent> $(Statement) / _ EOS )* )> #Block }
+                                    / NEWLINE ( _ EOS )* { <block ( <symbol Indent> $(Statement) ( <match Indent> $(Statement) / _ EOS )* )> #Block }
 
 // ====================
 //      Expression
