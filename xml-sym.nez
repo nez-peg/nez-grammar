@@ -1,4 +1,4 @@
-// XML Standard 1.0 
+// XML Standard 1.0 expressed by using SymbolTable
 // 
 
 File       = PROLOG? DTD? Xml
