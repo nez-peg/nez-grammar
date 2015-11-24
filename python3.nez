@@ -6,34 +6,32 @@
   Author:
     Shun Honda (https://github.com/shun-honda)
 */
-File                                = { ( NEWLINE / EOS / $(Statement) )* #Source } EOF
+File                                = <on !InParentheses { ( NEWLINE / EOS / $(Statement) )* #Source } > EOF
 Indent                              = <match Indent> S+
 NEWLINE                             = '\r'? '\n'
                                     / '\r'
 S                                   = [ \t]
 _                                   = S*
-__                                  = ( S / NEWLINE / '\\' NEWLINE / '#' ( !'\n' . )* )*
-___                                 = ( S / '\\' NEWLINE / COMMENT )*
-____                                = ( S / NEWLINE / '\\' NEWLINE / COMMENT )+
+__                                  = ( S / '\\' NEWLINE / COMMENT / <if InParentheses> NEWLINE )*
 COMMENT                             = '#' ( !'\n' . )*
 EOS                                 = ';'
                                     / NEWLINE
-                                    / '#' ( !'\n' . )*
+                                    / COMMENT
 EOF                                 = !.
 
 // ====================
 // Def
 // ====================
-FuncDef                             = { 'def' ___ $(Name) ___ $(Parameters) $({ ( _ '->' _ $(Test) )? #Arrow }) ___ ':' ___ $(Suite) #Function }
-Parameters                          = { '(' __ $(ParameterList)? __ ')' #Apply }
+FuncDef                             = { "def" __ $(Name) __ $(Parameters) $({ ( _ '->' _ $(Test) )? #Arrow }) __ ':' __ $(Suite) #Function }
+Parameters                          = { '(' <on InParentheses ( __ $(ParameterList)? __ )> ')' #Apply }
 ParameterList                       = { '**' _ $(Parameter) #Params }
-                                    / { '*' ( _ $(Parameter) )? ( ___ ',' __ $(Parameter) )* ( ___ ',' __ '**' _ $(Parameter) )? #Params }
-                                    / { ( $(DefParameter) ( ___ ',' __ $(DefParameter) )* )? ( ___ ',' __ ('**' _ $(Parameter) / '*' ( _ $(Parameter) )? ( ___ ',' __ $(Parameter) )* ( ___ ',' __ '**' _ $(Parameter) )?) )? ( ___ ',' )? #Params }
+                                    / { '*' ( _ $(Parameter) )? ( __ ',' __ $(Parameter) )* ( __ ',' __ '**' _ $(Parameter) )? #Params }
+                                    / { ( $(DefParameter) ( __ ',' __ $(DefParameter) )* )? ( __ ',' __ ('**' _ $(Parameter) / '*' ( _ $(Parameter) )? ( __ ',' __ $(Parameter) )* ( __ ',' __ '**' _ $(Parameter) )?) )? ( __ ',' )? #Params }
 DefParameter                        = Parameter {$ __ '=' __ $(Test) #Initialize }?
 Parameter                           = Name {$ __ ':' __ $(Test) #KeyValue }?
 VarArgList                          = { '**' _ $(VarArg) #VarArgs }
-                                    / { '*' ( _ $(VarArg) )? ( ___ ',' __ $(VarArg) )* ( ___ ',' __ '**' _ $(VarArg) )? #VarArgs }
-                                    / { ( $(DefVarArg) ( ___ ',' __ $(DefVarArg) )* )? ( ___ ',' __ ('**' _ $(VarArg) / '*' ( _ $(VarArg) )? ( ___ ',' __ $(VarArg) )* ( ___ ',' __ '**' _ $(VarArg) )?) )? ( ___ ',' )? #VarArgs }
+                                    / { '*' ( _ $(VarArg) )? ( __ ',' __ $(VarArg) )* ( __ ',' __ '**' _ $(VarArg) )? #VarArgs }
+                                    / { ( $(DefVarArg) ( __ ',' __ $(DefVarArg) )* )? ( __ ',' __ ('**' _ $(VarArg) / '*' ( _ $(VarArg) )? ( __ ',' __ $(VarArg) )* ( __ ',' __ '**' _ $(VarArg) )?) )? ( __ ',' )? #VarArgs }
 DefVarArg                           = VarArg {$ __ '=' __ $(Test) #Initialize }?
 VarArg                              = Name
 
@@ -42,7 +40,7 @@ VarArg                              = Name
 // ====================
 Decorated                           = { $(Decorators) _ ($(ClassDef) / $(FuncDef)) #Decorated }
 Decorators                          = Decorator {$ __ $(Decorator)+ #List }?
-Decorator                           = { '@' $(DottedName) ( ___ '(' __ $(ArgList)? __ ')' )? _ NEWLINE #Decorator }
+Decorator                           = { '@' $(DottedName) ( __ '(' <on InParentheses ( __ $(ArgList)? __ )> ')' )? _ NEWLINE #Decorator }
 
 // ====================
 //      Statement
@@ -58,34 +56,34 @@ SmallStatement                      = ExprStatement
                                     / GlobalStatement
                                     / NonLocalStatement
                                     / AssertStatement
-DelStatement                        = { 'del' ___ $(TestList) #Delete }
-PassStatement                       = { 'pass' #Pass }
+DelStatement                        = { "del" __ $(TestList) #Delete }
+PassStatement                       = { "pass" #Pass }
 FlowStatement                       = BreakStatement
                                     / ContinueStatement
                                     / ReturnStatement
                                     / RaiseStatement
                                     / YieldStatement
-BreakStatement                      = { 'break' #Break }
-ContinueStatement                   = { 'continue' #Continue }
-ReturnStatement                     = { 'return' ( ___ $(TestList) )? #Return }
-RaiseStatement                      = { 'raise' ( ___ $(TestList) ( ___ $({ 'from' ___ $(Test) #From }) )? )? #Raise }
+BreakStatement                      = { "break" #Break }
+ContinueStatement                   = { "continue" #Continue }
+ReturnStatement                     = { "return" ( __ $(TestList) )? #Return }
+RaiseStatement                      = { "raise" ( __ $(TestList) ( __ $({ "from" __ $(Test) #From }) )? )? #Raise }
 YieldStatement                      = YieldExpr
 ImportStatement                     = ImportName
                                     / ImportFrom
-ImportName                          = { 'import' ___ $(DottedAsNames) #Import }
-ImportFrom                          = { $({ 'from' ___ ('.'* $(Module) / '.'+) #From }) ___ $({ 'import' ___ ('(' __ $(ImportList) ( _ ',' )? __ ')' / $(ImportList) / '*') #Import }) #FromImport }
+ImportName                          = { "import" __ $(DottedAsNames) #Import }
+ImportFrom                          = { $({ "from" __ ('.'* $(Module) / '.'+) #From }) __ $({ "import" __ ('(' <on InParentheses ( __ $(ImportList) ( _ ',' )? __ )> ')' / $(ImportList) / '*') #Import }) #FromImport }
 
-// { @{'from' ___ @Module #From } ___ @{'import' ___ '*' #Import } #FromImport }
+// { @{"from" __ @Module #From } __ @{"import" __ '*' #Import } #FromImport }
 Module                              = { ( $(Name) '.' )* $(Name) #Field }
 ImportList                          = ImportAsName {$ ( __ ',' __ $(ImportAsName) )+ #List }?
-ImportAsName                        = Name {$ ___ 'as' ___ $(Name) #As }?
+ImportAsName                        = Name {$ __ "as" __ $(Name) #As }?
 DottedAsNames                       = DottedAsName {$ ( __ ',' __ $(DottedAsName) )+ #List }?
-DottedAsName                        = DottedName {$ ___ 'as' ___ $(Name) #As }?
-DottedName                          = Name {$ ( ___ '.' ___ $(Name) )+ #Field }?
-GlobalStatement                     = { 'global' ___ $(NameList) #Global }
-NonLocalStatement                   = { 'nonlocal' ___ $(NameList) #NonLocal }
+DottedAsName                        = DottedName {$ __ "as" __ $(Name) #As }?
+DottedName                          = Name {$ ( __ '.' __ $(Name) )+ #Field }?
+GlobalStatement                     = { "global" __ $(NameList) #Global }
+NonLocalStatement                   = { "nonlocal" __ $(NameList) #NonLocal }
 NameList                            = Name {$ ( __ ',' __ $(Name) )+ #List }?
-AssertStatement                     = { 'assert' ___ $(AssertTest) #Assert }
+AssertStatement                     = { "assert" __ $(AssertTest) #Assert }
 AssertTest                          = Test {$ __ ',' __ $(Test) #List }?
 CompoundStatement                   = IfStatement
                                     / WhileStatement
@@ -95,25 +93,25 @@ CompoundStatement                   = IfStatement
                                     / FuncDef
                                     / ClassDef
                                     / Decorated
-IfStatement                         = { 'if' ___ $(Test) ___ ':' ___ $(Suite) ( <match Indent> $(Elif) )* ( <match Indent> $(Else) )? #If }
-Elif                                = { 'elif' ___ $(Test) ___ ':' ___ $(Suite) #Elif }
-Else                                = { 'else' ___ ':' ___ $(Suite) #Else }
-WhileStatement                      = { 'while' ___ $(Test) ___ ':' ___ $(Suite) ( <match Indent> $(Else) )? #While }
-ForStatement                        = { 'for' ___ $(ExprList) ___ 'in' ___ $(TestList) ___ ':' ___ $(Suite) ( <match Indent> $(Else) )? #For }
-TryStatement                        = { 'try' ___ ':' ___ $(Suite) (( <match Indent> $(Except) )+ ( <match Indent> $(Else) )? ( <match Indent> $(Finally) )? / <match Indent> $(Finally)) #Try }
-Except                              = { 'except' ( ___ $(TestList) ( ___ $({ 'as' ___ $(Name) #As }) )? )? ___ ':' ___ $(Suite) #Except }
-Finally                             = { 'finally' ___ ':' ___ $(Suite) #Finally }
-WithStatement                       = { 'with' ___ $(WithItemList) ___ ':' ___ $(Suite) #With }
-WithItemList                        = WithItem {$ ( ___ ',' ___ $(WithItem) )+ #List }?
-WithItem                            = Test {$ ___ 'as' ___ $(Expr) #As }?
+IfStatement                         = { "if" __ $(Test) __ ':' __ $(Suite) ( <match Indent> $(Elif) )* ( <match Indent> $(Else) )? #If }
+Elif                                = { "elif" __ $(Test) __ ':' __ $(Suite) #Elif }
+Else                                = { "else" __ ':' __ $(Suite) #Else }
+WhileStatement                      = { "while" __ $(Test) __ ':' __ $(Suite) ( <match Indent> $(Else) )? #While }
+ForStatement                        = { "for" __ $(ExprList) __ "in" __ $(TestList) __ ':' __ $(Suite) ( <match Indent> $(Else) )? #For }
+TryStatement                        = { "try" __ ':' __ $(Suite) (( <match Indent> $(Except) )+ ( <match Indent> $(Else) )? ( <match Indent> $(Finally) )? / <match Indent> $(Finally)) #Try }
+Except                              = { "except" ( __ $(TestList) ( __ $({ "as" __ $(Name) #As }) )? )? __ ':' __ $(Suite) #Except }
+Finally                             = { "finally" __ ':' __ $(Suite) #Finally }
+WithStatement                       = { "with" __ $(WithItemList) __ ':' __ $(Suite) #With }
+WithItemList                        = WithItem {$ ( __ ',' __ $(WithItem) )+ #List }?
+WithItem                            = Test {$ __ "as" __ $(Expr) #As }?
 Suite                               = { $(SimpleStatement) #Block }
                                     / NEWLINE ( _ EOS )* { <block ( <symbol Indent> $(Statement) ( <match Indent> $(Statement) / _ EOS )* )> #Block }
 
 // ====================
 //      Expression
 // ====================
-ExprStatement                       = TestListStarExpr {$ ___ addAssignOp ___ ($(YieldExpr) / $(TestList)) }
-                                    / TestListStarExpr {$ ___ '=' __ ($(YieldExpr) / $(TestListStarExpr)) #Equals }*
+ExprStatement                       = TestListStarExpr {$ __ addAssignOp __ ($(YieldExpr) / $(TestList)) }
+                                    / TestListStarExpr {$ __ '=' __ ($(YieldExpr) / $(TestListStarExpr)) #Equals }*
 addAssignOp                         = '+=' #Addeq
                                     / '-=' #Subeq
                                     / '*=' #Muleq
@@ -126,31 +124,31 @@ addAssignOp                         = '+=' #Addeq
                                     / '>>=' #Rightshifteq
                                     / '**=' #Poweq
                                     / '//=' #FloorDiveq
-TestListStarExpr                    = TestStarExpr {$ ___ ',' __ $(TestStarExpr) #List }* ( ___ ',' )?
+TestListStarExpr                    = TestStarExpr {$ __ ',' __ $(TestStarExpr) #List }* ( __ ',' )?
 TestStarExpr                        = Test
                                     / StarExpr
-TestList                            = Test {$ ___ ',' __ $(Test) #List }* ( ___ ',' )?
-Test                                = OrTest {$ ___ 'if' ___ $(OrTest) ___ 'else' ___ $(Test) #If }?
+TestList                            = Test {$ __ ',' __ $(Test) #List }* ( __ ',' )?
+Test                                = OrTest {$ __ "if" __ $(OrTest) __ "else" __ $(Test) #If }?
                                     / LambDef
 TestNoCond                          = OrTest
                                     / LambDefNoCond
-LambDef                             = { 'lambda' ___ $(VarArgList)? ___ ':' __ $(Test) #Lambda }
-LambDefNoCond                       = { 'lambda' ___ $(VarArgList)? ___ ':' __ $(TestNoCond) #Lambda }
-OrTest                              = AndTest {$ __ 'or' ____ $(AndTest) #OrTest }*
-AndTest                             = NotTest {$ __ 'and' ____ $(NotTest) #AndTest }*
-NotTest                             = { 'not' ____ $(NotTest) #NotTest }
+LambDef                             = { "lambda" __ $(VarArgList)? __ ':' __ $(Test) #Lambda }
+LambDefNoCond                       = { "lambda" __ $(VarArgList)? __ ':' __ $(TestNoCond) #Lambda }
+OrTest                              = AndTest {$ __ "or" __ $(AndTest) #OrTest }*
+AndTest                             = NotTest {$ __ "and" __ $(NotTest) #AndTest }*
+NotTest                             = { "not" __ $(NotTest) #NotTest }
                                     / Comparison
-Comparison                          = StarExpr {$ ___ addCompOp __ $(StarExpr) }*
+Comparison                          = StarExpr {$ __ addCompOp __ $(StarExpr) }*
 addCompOp                           = '>=' #GreaterThanEquals
                                     / '<=' #LessThanEquals
                                     / '<' !'<' #LessThan
                                     / '>' !'>' #GreaterThan
                                     / '==' #Equals
                                     / '!=' #NotEquals
-                                    / 'in' #In
-                                    / 'not' __ 'in' #NotIn
-                                    / 'is' __ 'not' #IsNot
-                                    / 'is' #Is
+                                    / "in" #In
+                                    / "not" __ "in" #NotIn
+                                    / "is" __ "not" #IsNot
+                                    / "is" #Is
 StarExpr                            = '*'? Expr
 Expr                                = XOrExpr {$ __ '|' !'|' __ $(XOrExpr) #OrExpr }*
 XOrExpr                             = AndExpr {$ __ '^' __ $(AndExpr) #XOrExpr }*
@@ -161,10 +159,10 @@ Term                                = Factor {$ __ ('*' #Mul / '%' #Mod / '//' #
 Factor                              = { ('+' #Plus / '-' #Minus / '~' #Compl) __ $(Factor) }
                                     / Power
 Power                               = AtomTrailer {$ __ '**' __ $(Factor) #Power }?
-AtomTrailer                         = Atom {$ ___ addTrailer }*
-Atom                                = '(' __ { ( $(YieldExpr) / $(TestListComp) )? #Atom } __ ')'
-                                    / '[' __ { $(TestListComp)? #Atom } __ ']'
-                                    / '{' __ { $(DictorsetMaker)? #Atom } __ '}'
+AtomTrailer                         = Atom {$ __ addTrailer }*
+Atom                                = '(' <on InParentheses ( __ { ( $(YieldExpr) / $(TestListComp) )? #Atom } __ )> ')'
+                                    / '[' <on InParentheses ( __ { $(TestListComp)? #Atom } __ )> ']'
+                                    / '{' <on InParentheses ( __ { $(DictorsetMaker)? #Atom } __ )> '}'
                                     / '...'
                                     / NoParenthesesArgumentList_FuncCall
                                     / Name
@@ -174,32 +172,32 @@ Atom                                = '(' __ { ( $(YieldExpr) / $(TestListComp) 
                                     / True
                                     / False
 TestListComp                        = { $(Test) __ ($(CompFor) / ( ',' __ $(Test) __ )* __ ','?) #List }
-addTrailer                          = '(' __ $(ArgList)? __ ')' #Apply
-                                    / '[' __ $(SubScriptList) __ ']' #Array
-                                    / '.' ___ $(Name) #Field
-SubScriptList                       = SubScript {$ ( ___ ',' __ $(SubScript) )+ #List }? ___ ','?
-SubScript                           = { $(Test)? ___ ':' ___ $(Test)? ___ addSliceOp? #KeyValue }
+addTrailer                          = '(' <on InParentheses ( __ $(ArgList)? __ )> ')' #Apply
+                                    / '[' <on InParentheses ( __ $(SubScriptList) __ )> ']' #Array
+                                    / '.' __ $(Name) #Field
+SubScriptList                       = SubScript {$ ( __ ',' __ $(SubScript) )+ #List }? __ ','?
+SubScript                           = { $(Test)? __ ':' __ $(Test)? __ addSliceOp? #KeyValue }
                                     / Test
 addSliceOp                          = ':' $(Test)?
 ExprList                            = { $(StarExpr) ( __ ',' __ $(StarExpr) )* __ ','? #List }
-DictorsetMaker                      = { $(Test) ___ (':' __ $(Test) ___ ($(CompFor) / ( ',' __ $(Test) ___ ':' ___ $(Test) ___ )* ','?) / $(CompFor) / ( ',' __ $(Test) __ )* ','?) #Set }
-ClassDef                            = { 'class' ___ $(Name) ___ ( '(' __ $(ArgList) __ ')' ___ )? ':' ___ $(Suite) #Class }
+DictorsetMaker                      = { $(Test) __ (':' __ $(Test) __ ($(CompFor) / ( ',' __ $(Test) __ ':' __ $(Test) __ )* ','?) / $(CompFor) / ( ',' __ $(Test) __ )* ','?) #Set }
+ClassDef                            = { "class" __ $(Name) __ ( '(' <on InParentheses ( __ $(ArgList) __ )> ')' __ )? ':' __ $(Suite) #Class }
 ArgList                             = { '**' _ $(Test) #Args }
-                                    / { '*' ( _ $(Test) )? ( ___ ',' __ Argument )* ( ___ ',' __ '**' _ $(Test) )? #Args }
-                                    / { ( Argument ( ___ ',' __ Argument )* )? ( ___ ',' __ ('**' _ $(Test) / '*' ( _ $(Test) )? ( ___ ',' __ Argument )* ( ___ ',' __ '**' _ $(Test) )?) )? ( ___ ',' )? #Args }
-Argument                            = $({ $(Test) ( __ $(CompFor) )? ___ '=' __ $(Test) #Initialize })
+                                    / { '*' ( _ $(Test) )? ( __ ',' __ Argument )* ( __ ',' __ '**' _ $(Test) )? #Args }
+                                    / { ( Argument ( __ ',' __ Argument )* )? ( __ ',' __ ('**' _ $(Test) / '*' ( _ $(Test) )? ( __ ',' __ Argument )* ( __ ',' __ '**' _ $(Test) )?) )? ( __ ',' )? #Args }
+Argument                            = $({ $(Test) ( __ $(CompFor) )? __ '=' __ $(Test) #Initialize })
                                     / $(Test) ( __ $(CompFor) )?
 CompIter                            = CompFor
                                     / CompIf
-CompFor                             = { 'for' ___ $(ExprList) ___ 'in' ___ $(OrTest) !( _ ',' ) !( _ ':' ) ( __ $(CompIter) )? #For }
-CompIf                              = { 'if' ___ $(TestNoCond) ( __ $(CompIter) )? #if }
-YieldExpr                           = { 'yield' ___ $(YieldArg)? #Yield }
-YieldArg                            = { 'from' ___ $(Test) #From }
+CompFor                             = { "for" __ $(ExprList) __ "in" __ $(OrTest) !( _ ',' ) !( _ ':' ) ( __ $(CompIter) )? #For }
+CompIf                              = { "if" __ $(TestNoCond) ( __ $(CompIter) )? #if }
+YieldExpr                           = { "yield" __ $(YieldArg)? #Yield }
+YieldArg                            = { "from" __ $(Test) #From }
                                     / TestList
 NoParenthesesArgumentList_FuncCall  = Name {$ _ !( KEYWORD S+ / '(' / ',' ) Argument #Apply }
-None                                = { 'None' #None }
-True                                = { 'True' #True }
-False                               = { 'False' #False }
+None                                = { "None" #None }
+True                                = { "True" #True }
+False                               = { "False" #False }
 Name                                = { NAME #Name }
 NAME                                = !( KEYWORD (S+ / NEWLINE / ':') ) ID_START ID_CONTINUE*
 KEYWORD                             = 'False'
@@ -235,6 +233,39 @@ KEYWORD                             = 'False'
                                     / 'except'
                                     / 'in'
                                     / 'raise'
+"False"                             = 'False' !ID_CONTINUE
+"class"                             = 'class' !ID_CONTINUE
+"finally"                           = 'finally' !ID_CONTINUE
+"is"                                = 'is' !ID_CONTINUE
+"return"                            = 'return' !ID_CONTINUE
+"None"                              = 'None' !ID_CONTINUE
+"continue"                          = 'continue' !ID_CONTINUE
+"for"                               = 'for' !ID_CONTINUE
+"lambda"                            = 'lambda' !ID_CONTINUE
+"try"                               = 'try' !ID_CONTINUE
+"True"                              = 'True' !ID_CONTINUE
+"def"                               = 'def' !ID_CONTINUE
+"from"                              = 'from' !ID_CONTINUE
+"nonlocal"                          = 'nonlocal' !ID_CONTINUE
+"while"                             = 'while' !ID_CONTINUE
+"and"                               = 'and' !ID_CONTINUE
+"del"                               = 'del' !ID_CONTINUE
+"global"                            = 'global' !ID_CONTINUE
+"not"                               = 'not' !ID_CONTINUE
+"with"                              = 'with' !ID_CONTINUE
+"assert"                            = 'assert' !ID_CONTINUE
+"as"                                = 'as' !ID_CONTINUE
+"elif"                              = 'elif' !ID_CONTINUE
+"if"                                = 'if' !ID_CONTINUE
+"or"                                = 'or' !ID_CONTINUE
+"yield"                             = 'yield' !ID_CONTINUE
+"else"                              = 'else' !ID_CONTINUE
+"import"                            = 'import' !ID_CONTINUE
+"pass"                              = 'pass' !ID_CONTINUE
+"break"                             = 'break' !ID_CONTINUE
+"except"                            = 'except' !ID_CONTINUE
+"in"                                = 'in' !ID_CONTINUE
+"raise"                             = 'raise' !ID_CONTINUE
 Number                              = ImagNumber
                                     / FloatNumber
                                     / Integer
