@@ -25,6 +25,7 @@ SKIP
 
 _ = WS*
 __ = WS* (NL <match Indent> WS+)?
+___ = WS* (NL <match Indent> WS*)?
 WS = [ \t]
 
 Indent = <match Indent> WS+
@@ -238,11 +239,11 @@ PostIfExpression
 
 IfExpression
   = { IF _ $cond(ForExpression) _ "then" _ $then(ForExpression) ( _ "else" _ $else(ForExpression))? }
-  / {$(IfBlock) (NL <match Indent> "else" $else(Block))? #If}
+  / {IfBlock (NL <match Indent> "else" $else(Block))? }
   / ForExpression
 
 IfBlock
-  = {IF _ $cond(ForExpression) $then(Block) ( NL <match Indent> "else" _ IF _ $(ForExpression) $(Block))*}
+  = IF _ $cond(ForExpression) $then(Block) $else({( NL <match Indent> "else" _ IF _ $cond(ForExpression) $then(Block))* })
 
 IF
   = "if" #If
@@ -337,7 +338,7 @@ ShiftExpression
   = AddictiveExpression {$left _ SHIFT __ $right(AddictiveExpression)}*
 
 AddictiveExpression
-  = MathExpression {$left _ ('+' #Add / '-' #Sub) __ $right(MathExpression)}*
+  = MathExpression {$left _ ('+' #Add / '-' #Sub) ___ $right(MathExpression)}*
 
 MathExpression
   = UnaryExpression {$left _ MATH __ $right(UnaryExpression)}*
@@ -381,14 +382,14 @@ Accessible
   /// Invocation
 
 Invocation
-  = MemberExpression {$recv (Accessor /_ $(Arguments) #Apply) }+
+  = MemberExpression {$recv (Accessor / $(Arguments) #Apply) }+
   / {"super" $(_ Arguments)? #SuperApply}
   / Value {$recv Accessor }*
   /// { (UNARY_MATH / '+' #Plus / '-' #Minus) _ $(UnaryExpression)}
 
 Arguments
   = { '(' (_ WrappedArgList (_ ',')?)? _ (NL <match Indent>)? ')' #List}
-  / { UnwrappedArgList (_ ',')? #List}
+  / { _ UnwrappedArgList (_ ',')? #List}
   / { NL <symbol Indent> UnwrappedAssignList (_ ',')? #List}
 
 ListIndent
@@ -443,7 +444,8 @@ Value
   / This
 
 Parenthetical
-  = {'(' _ Body _ ')' }
+  = '(' Block ___ ')'
+  / {'(' (_ / NL*) Body (_ / NL*) ')' #Block}
 
 Return
   = {"return" $(_ IfExpression)? #Return}
@@ -636,7 +638,7 @@ class Klass
   @staticVar: 0
 
   utod :(a) ->
-    this.y < a.y
+    return this.y < a.y
 
 '''
 
@@ -674,6 +676,18 @@ finally
   console.log "end"
 '''
 
+example Try '''
+try
+  throw new Error()
+'''
+
+example Throw throw new Error()
+
+example Catch '''
+catch e
+  console.log e
+'''
+
 example Root '''
 if typeof p.lintToken is 'function'
     e "'tokens' is required for 'lintToken'" unless p.tokens
@@ -692,6 +706,17 @@ console.log(
     2
   1
         1
+)
+'''
+
+// output: 9
+example Root '''
+console.log (
+  1
+  1+2+
+  3
+  +4+
+  5
 )
 '''
 
