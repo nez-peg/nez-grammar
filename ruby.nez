@@ -31,13 +31,13 @@ BlockParameter                       = '||' { #Empty }
                                      / '|' __ ( BlockVar / { #Empty } ) __ '|'
 BlockVar                             = MultipleLeftHandSideExpression
                                      / LeftHandSideExpression
-BodyStatement                        = { addBodyStatements #Begin }
+BodyStatement                        = { addBodyStatements #Body }
 addBodyStatements                    = $(CompleteStatement) __ $(RescueList)?  __ $(ElseClause)? ( __ "ensure" __ $(CompleteStatement) )?
 RescueList                           = { $(RescueClause) ( __ $(RescueClause) )* #List }
 RescueClause                         = { "rescue" ( _ $(ExceptionClassList) )? ( _ "=>" __ $(LeftHandSideExpression) )? _ THEN __ $(CompleteStatement) #Rescue }
 ExceptionClassList                   = OperatorExpression
                                      / MultipleRightHandSideExpression
-CompleteStatement                    = { $(Statement) ( EOS+ _ $(Statement) )* EOS* _ #BlockExpression }
+CompleteStatement                    = { $(Statement) ( EOS+ _ $(Statement) )* EOS* _ #StatementList }
                                      / EOS* _ { #Empty }
 Statement                            = InitializerStatement
 //                                   / '{' __ CompleteStatement __ '}'
@@ -198,7 +198,7 @@ StatementLikeExpression              = IfExpression
                                      / UntilExpression
                                      / ForExpression
                                      / CaseExpression
-                                     / BeginExpression
+                                     / ExceptionExpression
                                      / <on !RequireArgs YieldExpression>
                                      / ReturnExpression
                                      / BreakExpression
@@ -235,7 +235,7 @@ CaseList                             = { $(WhenClause) ( __ $(WhenClause) )* #Li
 WhenClause                           = { "when" __ $(WhenArgs) _ THEN __ $(CompleteStatement) #When }
 WhenArgs                             = { addOperatorExpressions ( _ ',' __ $(SplattingArgument) )? #List }
                                      / { $(SplattingArgument) #List }
-BeginExpression                      = { "begin" EOS* _ addBodyStatements __ "end" #Begin }
+ExceptionExpression                  = { "begin" EOS* _ addBodyStatements __ "end" #ExceptionBlock }
 PrimaryCallExpression                = { $(DummySelf) $(MethodOnlyName) $(<on WithParentheses Arguments>)? ( __ $(Block) )? #Apply }
                                      / { $(DummySelf) $(Identifier) __ $(Block) #Apply }
                                      / { $(DummySelf) $(Identifier) $(<on WithParentheses Arguments>) ( __ $(Block) )? #Apply }
@@ -514,7 +514,7 @@ until num < 3 do
 end
 '''
 
-example BeginExpression '''
+example ExceptionExpression '''
 begin
   puts "a" + 4  #文字列と数値の足し算のため例外発生
 rescue => ex
@@ -527,7 +527,7 @@ ensure
 end
 '''
 
-example BeginExpression '''
+example ExceptionExpression '''
 begin
   raise "Exception!"
 rescue => ex
