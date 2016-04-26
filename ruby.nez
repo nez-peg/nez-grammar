@@ -42,7 +42,7 @@ CompleteStatement                    = { $(Statement) ( EOS+ _ $(Statement) )* E
 Statement                            = InitializerStatement
 //                                   / '{' __ CompleteStatement __ '}'
                                      / <on !InRescue NoDecorationStatement> {$ _ addDecorator }*
-InitializerStatement                 = { 'BEGIN' __ '{' __ $(CompleteStatement) __ '}' #Initializer }
+InitializerStatement                 = { 'BEGIN' _ '{' __ $(CompleteStatement) __ '}' #Initializer }
 addDecorator                         = "if" __ $(Expression) #IfDecorator
                                      / "unless" __ $(Expression) #UnlessDecorator
                                      / "while" __ $(Expression) #WhileDecorator
@@ -58,7 +58,7 @@ AliasStatement                       = { "alias" _ $(FunctionNameOrSymbol) _ $(F
 UndefStatement                       = { "undef" ( _ ($(FunctionNameOrSymbol)) )+ }
 FunctionNameOrSymbol                 = DefinedFunctionName
                                      / Symbol
-FinalizerStatement                   = { 'END' __ '{' __ $(CompleteStatement) __ '}' #Finalizer }
+FinalizerStatement                   = { 'END' _ '{' __ $(CompleteStatement) __ '}' #Finalizer }
 
 // Assignment and left/right hand side expression
 AssignmentStatement                  = { $left(LeftHandSideExpression) _ addAssignmentOperator __ $right(CommandCallExpression) }
