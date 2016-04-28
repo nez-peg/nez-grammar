@@ -54,9 +54,9 @@ NoDecorationStatement                = AliasStatement
                                      / AssignmentStatement
                                      / <if !InRescue> Expression
                                      / <if InRescue> KeywordNotExpression
-AliasStatement                       = { "alias" _ $(FunctionNameOrSymbol) _ $(FunctionNameOrSymbol) #Alias }
-UndefStatement                       = { "undef" ( _ ($(FunctionNameOrSymbol)) )+ }
-FunctionNameOrSymbol                 = DefinedFunctionName
+AliasStatement                       = { "alias" _ $(MethodNameOrSymbol) _ $(MethodNameOrSymbol) #Alias }
+UndefStatement                       = { "undef" ( _ ($(MethodNameOrSymbol)) )+ #Undef }
+MethodNameOrSymbol                   = DefinedFunctionName
                                      / Symbol
 FinalizerStatement                   = { 'END' _ '{' __ $(CompleteStatement) __ '}' #Finalizer }
 
@@ -295,7 +295,7 @@ Arguments                            = <if WithParentheses> '(' __ ')'
                                      / <if WithParentheses> '(' __ { addOperatorExpressions _ ',' __ $(ChainedCommand) #List } __ ')'
                                      / <if !WithParentheses> !( _ '{' ) { addArgumentList #List }
 addArgumentList                      = $(<on !WithDoBlock Command>)
-                                     / $(BlockArgument)
+                                     / $(BlockArgument) // TODO aboid in with arg return,break,next
                                      / $(SplattingArgument) ( __ "," __ $(BlockArgument) )?
                                      / addAssocs ( _ "," __ $(SplattingArgument) )? ( _ "," __ $(BlockArgument) )?
                                      / addOperatorExpressions ( _ "," __ addAssocs)? ( _ "," __ $(SplattingArgument) )? ( _ "," __ $(BlockArgument) )?
