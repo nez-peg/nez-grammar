@@ -119,15 +119,15 @@ CommandCallExpression                = <on !WithDoBlock Command>
 //                                   / <on WithArgs ReturnExpression> //FIXME: conflicts with decoration statement
 //                                   / <on WithArgs BreakExpression>
 //                                   / <on WithArgs NextExpression>
-Command                              = { $(DummySelf) $(MethodOnlyName) __ $(<on !WithParentheses Arguments>) addDoBlock #Apply }
-                                     / { $(DummySelf) $(Identifier) __ $(<on !WithParentheses Arguments>) addDoBlock #Apply }
+Command                              = { $(DummySelf) $(MethodOnlyName) _ $(<on !WithParentheses Arguments>) addDoBlock #Apply }
+                                     / { $(DummySelf) $(Identifier) _ $(<on !WithParentheses Arguments>) addDoBlock #Apply }
                                      / PrimaryExpression {$ addCall &( _ ('.' / '::') ) }* {$ <on !WithParentheses addCommandCall> addDoBlock }
                                      / <on RequireArgs SuperExpression>
                                      / <if !WithDoBlock> <on RequireArgs YieldExpression>
 addDoBlock                           = <if WithDoBlock> __ $(DoEndBlock)
                                      / <if !WithDoBlock>
 ChainedCommand                       = <on WithDoBlock Command> {$ <on WithParentheses addCommandCall> }*
-addCommandCall                       = <if WithParentheses> __ ('.' / '::') __ $(MethodName) $(<on WithParentheses Arguments>)? #Apply
+addCommandCall                       = <if WithParentheses> __ ('.' / '::') __ $(MethodName) $(<on WithParentheses Arguments>)? #Apply // TODO space check
                                      / <if !WithParentheses> _ ('.' / '::') __ $(MethodName) __ $(<on !WithParentheses Arguments>) #Apply
 
 OperatorExpression                   = AssignmentExpression
