@@ -34,7 +34,7 @@ BlockParameter                       = '||' { #Empty }
                                      / '|' __ { addParameterList #List } __ '|'
 BlockVar                             = MultipleLeftHandSideExpression
                                      / LeftHandSideExpression
-BodyStatement                        = { addBodyStatements #Body }
+BodyStatement                        = { addBodyStatements #BlockExpr }
 addBodyStatements                    = $main(CompleteStatement) __ $rescue(RescueList)?  __ $else(ElseClause)? ( __ "ensure" __ $ensure(CompleteStatement) )?
 RescueList                           = { $rescue(RescueClause) ( __ $rescue(RescueClause) )* #List }
 RescueClause                         = { "rescue" ( _ $class(ExceptionClassList) )? ( _ "=>" __ $target(LeftHandSideExpression) )? _ THEN __ $then(CompleteStatement) #Rescue }
@@ -552,44 +552,15 @@ example PrimaryExpression print(a)
 example PrimaryExpression print(a, b, c)
 example Expression a[0]
 
-example Expression @visitor = Arel::Visitors::MySQL.new self
-example CompleteStatement '''
-  test "serializes #{arg.class} verbatim" do
-    aAssert_arguments_unchanged arg
-  end
-'''
-example Statement '''
-joins.concat outer_joins.flat_map { |oj|
-  if join_root.match? oj.join_root
-    walk join_root, oj.join_root
-  else
-    oj.join_root.children.flat_map { |child|
-      make_outer_joins oj.join_root, child
-    }
-  end
-}
-'''
-example OperatorExpression '''
-outer_joins.flat_map { |oj|
-  if join_root.match? oj.join_root
-    walk join_root, oj.join_root
-  else
-    oj.join_root.children.flat_map { |child|
-      make_outer_joins oj.join_root, child
-    }
-  end
-}
-'''
-
 /* Identifier */
 Identifier                           = { IDENTIFIER #Name }
-IDENTIFIER                           = !KEYWORD IDENTIFIER_START IDENTIFIER_PART* !":"
+IDENTIFIER                           = !KEYWORD IDENTIFIER_START IDENTIFIER_PART* ![:!?]
 IDENTIFIER_START                     = [a-zA-Z_]
 IDENTIFIER_PART                      = IDENTIFIER_START
                                      / DIGIT
 DIGIT                                = [0-9_]
 LocalIdentifier                      = { LOCALIDENTIFIER #Name }
-LOCALIDENTIFIER                      = !KEYWORD LOCALIDENTIFIER_START IDENTIFIER_PART*
+LOCALIDENTIFIER                      = !KEYWORD LOCALIDENTIFIER_START IDENTIFIER_PART* ![!?]
 LOCALIDENTIFIER_START                = [a-z_]
 
 VariableName                         = { VARIABLE_IDENTIFIER #Name }
