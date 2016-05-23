@@ -8,7 +8,7 @@ File                                 = BRANKLINE* _ { $source(CompleteStatement)
 //-----------------------------------------
 EOS                                  = _ (';' / COMMENT? LINE_TERMINATOR) BRANKLINE*
 SPACE                                = [\t\v\f \u00A0\uFEFF]
-                                     / '\\' LINE_TERMINATOR
+                                     / ROW_CONNECTION
 LINE_TERMINATOR                      = [\n\r\u2028\u2029]
 BRANKLINE                            = _ COMMENT? LINE_TERMINATOR
                                      / MULTI_LINE_COMMENT LINE_TERMINATOR
@@ -21,6 +21,7 @@ SP_WITH_NEWLINE                      = _ COMMENT? LINE_TERMINATOR BRANKLINE* _
 SP                                   = SPACE+
 __                                   = SP_WITH_NEWLINE?
 _                                    = SPACE*
+ROW_CONNECTION                       = '\\' LINE_TERMINATOR
 EOF                                  = !.
 
 //-------------------------------------------------------
@@ -93,12 +94,12 @@ LeftHandForAssignSingle              = { $base(PrimaryExpressionForLeftHand) add
                                      / PrimaryTarget
 LeftHandForAssignCalc                = { $base(PrimaryExpressionForLeftHand) addTargetForAssignCalc }
                                      / VariableName
-addTarget                            = '[' __ $index(IndexArguments)? __ ']' #Indexer
+addTarget                            = ROW_CONNECTION* '[' __ $index(IndexArguments)? __ ']' #Indexer
                                      / ( __ '.' / _ '::') __ $name(Identifier) #Field
-addTargetForAssignSingle             = '[' __ $index(IndexArguments)? __ ']' #Indexer
+addTargetForAssignSingle             = ROW_CONNECTION* '[' __ $index(IndexArguments)? __ ']' #Indexer
                                      / ( __ '.' / _ '::') __ $name(LocalIdentifier) #Field
                                      / ( __ '.' / '::') __ $name(ConstantIdentifier) #Field
-addTargetForAssignCalc               = '[' __ $index(IndexArguments)? __ ']' #Indexer
+addTargetForAssignCalc               = ROW_CONNECTION* '[' __ $index(IndexArguments)? __ ']' #Indexer
                                      / __ '.' __ $name(Identifier) #Field
                                      / _ '::' __ $name(LocalIdentifier) #Field
 PrimaryTarget                        = VariableName
@@ -189,10 +190,10 @@ addUnaryOperator                     = "+" #Plus
                                      / "~" #Invert
                                      / "!" #Not
 PrimaryExpression                    = Primary {$base addCall }*
-PrimaryExpressionForLeftHand         = Primary {$base addCall &( ('[' / __ '.' / _ '::') ) }*
+PrimaryExpressionForLeftHand         = Primary {$base addCall &( ( ROW_CONNECTION* '[' / __ '.' / _ '::') ) }*
 PrimaryExpressionForCommand          = Primary {$base addCall &( __ ('.' / '::') ) }* // TODO [ . .
 PrimaryExpressionForPath             = Primary {$base addCall &( _ '::' ) }* // TODO . . ::
-addCall                              = '[' __ $index(IndexArguments)? __ ']' #Indexer
+addCall                              = ROW_CONNECTION* '[' __ $index(IndexArguments)? __ ']' #Indexer
                                      / _ '::' __ $name(MethodName) $param(Arguments) ( _ $body(Block) )? #Apply
                                      / __ '.' __ $name(MethodName) $param(Arguments)? ( _ $body(Block) )? #Apply
                                      / _ '::' __ !CONSTANT $name(MethodName) ( _ $body(Block) )? #Apply
@@ -285,6 +286,7 @@ DefinedFunctionName                  = AssignmentLikeMethodName
                                      / MethodName
 FunctionParameters                   = '(' { __ addParameterList? #List } __ ')' EOS?
                                      / { addParameterList? #List } EOS
+// TODO add ruby 2.0 expression ( keyword arguments, option hash)
 addParameterList                     = $procedure(ProcedureParameter)
                                      / $variadic(VariadicParameter) ( __ ',' __ $procedure(ProcedureParameter) )?
                                      / addOptionalParameters ( __ ',' __ $variadic(VariadicParameter) )? ( __ ',' __ $procedure(ProcedureParameter) )?
@@ -402,14 +404,12 @@ PN_BODY                              = '(' PN_PAREN ')'
                                      / '{' PN_BRACE '}'
                                      / '[' PN_BRAKET ']'
                                      / '<' PN_ANGLE '>'
-                                     / '/' PN_SLASH '/'
-                                     / '!' PN_EXCLAMATION '!'
+                                     / <block ( <symbol PN_DELIMITER> ( !<match PN_DELIMITER> . )* <match PN_DELIMITER> )>
 PN_PAREN                             = ( '(' PN_PAREN ')' / ![()] . )*
 PN_BRACE                             = ( '{' PN_BRACE '}' / ![{}] . )*
 PN_BRAKET                            = ( '[' PN_BRAKET ']' / ![\[\]] . )*
 PN_ANGLE                             = ( '<' PN_ANGLE '>' / ![<>] . )*
-PN_SLASH                             = ( ![/] . )*
-PN_EXCLAMATION                       = ( ![!] . )*
+PN_DELIMITER                         = ![_0-9a-zA-Z] .
 HereDocument                         = <block ( "<<" <symbol HD_DELIMITER> ( !LINE_TERMINATOR . )* LINE_TERMINATOR { HD_BODYLINE* #HereDocument } HD_ENDLINE )>
                                      / <block ( "<<" "-" <symbol HD_DELIMITER> ( !LINE_TERMINATOR . )* LINE_TERMINATOR { ( _ HD_BODYLINE )* #HereDocument } _ HD_ENDLINE )>
 HD_DELIMITER                         = IDENTIFIER_PART+
