@@ -45,13 +45,13 @@ CompleteStatement                    = { $statement(Statement) ( EOS+ _ $stateme
                                      / Statement EOS* _
                                      / EOS* _ { #Empty }
 Statement                            = InitializerStatement
-                                     / NoDecorationStatement {$body _ addDecorator }*
+                                     / NoDecorationStatement ( {$then _ addCondDecorator } / {$body _ addLoopDecorator } )*
 InitializerStatement                 = { "BEGIN" _ '{' __ $body(CompleteStatement) __ '}' #Initializer }
-addDecorator                         = "if" __ $cond(Expression) #IfDecorator
-                                     / "unless" __ $cond(Expression) #UnlessDecorator
-                                     / "while" __ $cond(Expression) #WhileDecorator
-                                     / "until" __ $cond(Expression) #UntilDecorator
-                                     / "rescue" __ $rescue(NoDecorationStatementInRescue) #RescueDecorator
+addCondDecorator                     = "if" __ $cond(Expression) #IfExpr
+                                     / "unless" __ $cond(Expression) #Unless
+addLoopDecorator                     = "while" __ $cond(Expression) #While
+                                     / "until" __ $cond(Expression) #Until
+                                     / "rescue" __ $rescue(NoDecorationStatementInRescue) #Rescue
 NoDecorationStatement                = AliasStatement
                                      / UndefStatement
                                      / FinalizerStatement
@@ -71,10 +71,10 @@ FinalizerStatement                   = { "END" _ '{' __ $body(CompleteStatement)
 // Assignment and left/right hand side expression
 AssignmentStatement                  = { $left(LeftHandForAssignSingle) _ '=' #Assign __ $right(CommandCallExpression / JumpExpressionWithArgs) }
                                      / { $left(LeftHandForAssignCalc) _ addAbbreviatedAssignmentOperator __ $right(CommandCallExpression / JumpExpressionWithArgs) }
-                                     / { $left(LeftHandSideExpression) _ '=' __ $right(MultipleRightHandSideExpression) #ManytToOneAssign }
-                                     / { $left(LHSExpandExpression) _ '=' __ $right(RightHandSideExpression) #OneToPackingAssign }
-                                     / { $left(MultipleLeftHandSideExpression) _ '=' __ $right(MultipleRightHandSideExpression) #ManyToManyAssign }
-                                     / { $left(MultipleLeftHandSideExpression) _ '=' __ $right(RightHandSideExpression) #ManyToManyAssign }
+                                     / { $left(LeftHandSideExpression) _ '=' __ $right(MultipleRightHandSideExpression) #MultipleAssign }
+                                     / { $left(LHSExpandExpression) _ '=' __ $right(RightHandSideExpression) #MultipleAssign }
+                                     / { $left(MultipleLeftHandSideExpression) _ '=' __ $right(MultipleRightHandSideExpression) #MultipleAssign }
+                                     / { $left(MultipleLeftHandSideExpression) _ '=' __ $right(RightHandSideExpression) #MultipleAssign }
 addAbbreviatedAssignmentOperator     = '*=' #AssignMul
                                      / '/=' #AssignDiv
                                      / '%=' #AssignMod
@@ -110,7 +110,7 @@ MultipleLeftHandSideExpression       = { addMultipleLHSList ( $item(LHSExpandExp
 addMultipleLHSList                   = ( $item(LHSListItem) _ ',' __ )+
 LHSListItem                          = GroupingLHSExpression
                                      / LeftHandSideExpression
-LHSExpandExpression                  = { '*' $item(LeftHandSideExpression)? #Sprat }
+LHSExpandExpression                  = { '*' $item(LeftHandSideExpression)? #Variadic }
 GroupingLHSExpression                = { '(' __ $item(MultipleLeftHandSideExpression) __ ')' #Grouping }
 RightHandSideExpression              = CommandCallExpression
                                      / JumpExpressionWithArgs
@@ -145,7 +145,7 @@ CommandWithDoBlock                   = { $base(PrimaryExpressionForCommand) _ ad
                                      / { $(DummySelf) $name(Identifier) $param(<on onlyDecorator ArgumentsWithoutParenetheses>) _ $body(DoEndBlock) #Apply }
                                      / SuperExpressionRequireBlockArgs
 ChainedCommand                       = CommandWithDoBlock {$base __ addChainMethdCall }*
-addChainMethdCall                    = ('.' / '::') __ $name(MethodName) $param(Arguments)? #Apply
+addChainMethdCall                    = ('.' / '::') __ $name(MethodName) _ $param(Arguments)? #Apply
 addChainMethdCallWithoutParentheses  = ( __ '.' / '::') __ $name(MethodName) $param(<on onlyDecorator ArgumentsWithoutParenetheses>) #Apply
 OperatorExpression                   = AssignmentExpression
                                      / DefinedExpression
@@ -194,8 +194,8 @@ PrimaryExpressionForLeftHand         = Primary {$base addCall &( ( ROW_CONNECTIO
 PrimaryExpressionForCommand          = Primary {$base addCall &( __ ('.' / '::') ) }* // TODO [ . .
 PrimaryExpressionForPath             = Primary {$base addCall &( _ '::' ) }* // TODO . . ::
 addCall                              = ROW_CONNECTION* '[' __ $index(IndexArguments)? __ ']' #Indexer
-                                     / _ '::' __ $name(MethodName) $param(Arguments) ( _ $body(Block) )? #Apply
-                                     / __ '.' __ $name(MethodName) $param(Arguments)? ( _ $body(Block) )? #Apply
+                                     / _ '::' __ $name(MethodName) _ $param(Arguments) ( _ $body(Block) )? #Apply
+                                     / __ '.' __ $name(MethodName) _ $param(Arguments)? ( _ $body(Block) )? #Apply
                                      / _ '::' __ !CONSTANT $name(MethodName) ( _ $body(Block) )? #Apply
                                      / '::' __ $name(ConstantIdentifier) #Field
 Primary                              = StatementLikeExpression
@@ -231,10 +231,10 @@ StatementLikeExpression              = ClassExpression
 DefinedExpression                    = { "defined?" __ $base(OperatorExpression) #Defined }
 DefinedExpressionWithParentheses     = { "defined?" __ '(' __ $base(Expression) __ ')' #Defined }
 // Control Expressions
-IfExpression                         = { "if" __ $cond(Expression) _ THEN __ $then(CompleteStatement) __ $else(ElseClause / ElsifClause)? __ "end" #If }
+IfExpression                         = { "if" __ $cond(Expression) _ THEN __ $then(CompleteStatement) __ $else(ElseClause / ElsifClause)? __ "end" #IfExpr }
 THEN                                 = ( EOS __ )? "then"
                                      / EOS
-ElsifClause                          = { "elsif" __ $cond(Expression) _ THEN __ $then(CompleteStatement) __ $else(ElseClause / ElsifClause)? #If }
+ElsifClause                          = { "elsif" __ $cond(Expression) _ THEN __ $then(CompleteStatement) __ $else(ElseClause / ElsifClause)? #IfExpr }
 ElseClause                           = "else" __ CompleteStatement
 UnlessExpression                     = { "unless" __ $cond(Expression) _ THEN __ $then(CompleteStatement) __ $else(ElseClause)? __ "end" #Unless }
 WhileExpression                      = { "while" __ $cond(<on Nondo Expression>) _ DO __ $body(CompleteStatement) __ "end" #While }
@@ -248,12 +248,12 @@ WhenClause                           = { "when" __ $cond(WhenArgs) _ THEN __ $th
 WhenArgs                             = { addOperatorExpressions ( _ ',' __ $variadic(VariadicArgument) )? #List }
                                      / { $variadic(VariadicArgument) #List }
 ExceptionExpression                  = { "begin" __ addBodyStatements __ "end" #ExceptionBlock }
-PrimaryCallExpression                = { $(DummySelf) $name(MethodOnlyName) $param(Arguments)? ( _ $body(Block) )? #Apply }
+PrimaryCallExpression                = { $(DummySelf) $name(MethodOnlyName) _ $param(Arguments)? ( _ $body(Block) )? #Apply }
                                      / { $(DummySelf) $name(Identifier) _ $body(Block) #Apply }
-                                     / { $(DummySelf) $name(Identifier) $param(Arguments) ( _ $body(Block) )? #Apply }
+                                     / { $(DummySelf) $name(Identifier) _ $param(Arguments) ( _ $body(Block) )? #Apply }
                                      / SuperExpression
 DummySelf                            = { `self` #Self }
-SuperExpression                      = { $(DummySelf) $super(Super) $param(Arguments)? ( _ $body(Block) )? #Apply }
+SuperExpression                      = { $(DummySelf) $super(Super) _ $param(Arguments)? ( _ $body(Block) )? #Apply }
 SuperExpressionRequireArgs           = { "super" $param(<on onlyDecorator ArgumentsWithoutParenetheses>) #Super }
 SuperExpressionRequireBlockArgs      = { "super" $param(<on onlyDecorator ArgumentsWithoutParenetheses>) _ $body(DoEndBlock) #Super }
 Super                                = { "super" #Super }
@@ -287,14 +287,14 @@ DefinedFunctionName                  = AssignmentLikeMethodName
 FunctionParameters                   = '(' { __ addParameterList? #List } __ ')' EOS?
                                      / { addParameterList? #List } EOS
 // TODO add ruby 2.0 expression ( keyword arguments, option hash)
-addParameterList                     = $procedure(ProcedureParameter)
-                                     / $variadic(VariadicParameter) ( __ ',' __ $procedure(ProcedureParameter) )?
-                                     / addOptionalParameters ( __ ',' __ $variadic(VariadicParameter) )? ( __ ',' __ $procedure(ProcedureParameter) )?
-                                     / $name(LocalIdentifier) ( __ ',' __ addParameterList )?
-addOptionalParameters                = $optional(OptionalParameter) ( __ ',' __ $optional(OptionalParameter) )*
-OptionalParameter                    = { $name(LocalIdentifier) __ "=" __ $default(OperatorExpression) #Optional }
-VariadicParameter                    = { "*" ( __ $name(LocalIdentifier) )? #Variadic }
-ProcedureParameter                   = { "&" __ $name(LocalIdentifier) #Procedure }
+addParameterList                     = $papam(ProcedureParameter)
+                                     / $param(VariadicParameter) ( __ ',' __ $param(ProcedureParameter) )?
+                                     / addOptionalParameters ( __ ',' __ $param(VariadicParameter) )? ( __ ',' __ $param(ProcedureParameter) )?
+                                     / $param( { $name(LocalIdentifier) #Param } ) ( __ ',' __ addParameterList )?
+addOptionalParameters                = $param(OptionalParameter) ( __ ',' __ $param(OptionalParameter) )*
+OptionalParameter                    = { $name(LocalIdentifier) __ "=" __ $default(OperatorExpression) #OptionalParam }
+VariadicParameter                    = { "*" ( __ $name(LocalIdentifier) )? #VariadicParam }
+ProcedureParameter                   = { "&" __ $name(LocalIdentifier) #ProcedureParam }
 TargetClass                          = VariableName
                                      / PseudoVariable
                                      / '(' __ Expression __ ')'
@@ -344,8 +344,8 @@ Literal                              = NumericLiteral
 NumericLiteral                       = HexIntegerLiteral
                                      / BinaryIntegerLiteral
                                      / FloatingPointLiteral
-                                     / DecimalLiteral
                                      / OctalIntegerLiteral
+                                     / DecimalLiteral
 HexIntegerLiteral                    = { '0' [xX] HEX+ #HexInteger }
 BinaryIntegerLiteral                 = { '0' [bB] [01_]+ #BinaryInteger }
 FloatingPointLiteral                 = { DECIMAL_INTEGER '.' DIGIT+ EXPONENT_PART? #Float }
@@ -357,7 +357,8 @@ SIGN                                 = '+'
                                      / '-'
 DecimalLiteral                       = { [1-9] DIGIT* #Integer }
                                      / '0' [dD] { DIGIT+ #Integer }
-OctalIntegerLiteral                  = { '0' ([oO] OCT+ / OCT*) #OctalInteger }
+                                     / { '0' #Integer }
+OctalIntegerLiteral                  = { '0' [oO]? OCT+ #OctalInteger }
 OCT                                  = [0-7_]
 StringLiteral                        = { ["] $String( { DoubleStringCharacter* #String } ) ["] ( _ ["] $String( { DoubleStringCharacter* #String } ) ["] )+  #ConnectString }
                                      / ["] { DoubleStringCharacter* #String } ["]
@@ -384,7 +385,7 @@ SINGLE_STRING_CHARACTER              = !( ['] / '\\' / LINE_TERMINATOR ) SOURCE
                                      / '\\' ESCAPE_SEQUENCE
 BACK_STRING_CHARACTER                = !( [`] / '\\' ) SOURCE
                                      / '\\' ESCAPE_SEQUENCE
-RegularExpressionLiteral             = { '/' REGEX_BODY? '/' REGEX_FLAGS #RegularExp }
+RegularExpressionLiteral             = { '/' REGEX_BODY? '/' REGEX_FLAGS #Regex }
 REGEX_BODY                           = REGEX_FIRST_CHAR REGEX_CHAR*
 REGEX_FIRST_CHAR                     = REGEX_BACKSLASH_SEQUENCE
                                      / ![*\\/\x5b] SOURCE
