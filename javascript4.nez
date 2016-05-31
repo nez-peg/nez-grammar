@@ -12,7 +12,7 @@
  *   Kensuke Tamura (https://github.com/kensuketamura)
  *   Kimio Kuramitsu (https://github.com/kkuramitsu)
  */
-File                            = { ( __ $(SourceElement) )* __ #Source }
+File                            = { ( __ <on InOperator $(SourceElement)> )* __ #Source }
 
 /* Code Layout : Line-sensitive */
 SPACE                           = [\t\v\f \u00A0\uFEFF]
@@ -198,14 +198,14 @@ addCondition                    = '(' __ $cond(Expression) __ ')'
 ForStatement                    = { 'for' __ '(' __ addForStatementPart __ ')' __ $body(Statement) #For }
 addForStatementPart             = "var" __ <on !InOperator $init(VariableDeclaration)> __ ';' __ $cond(Expression)? __ ';' __ $body(Expression)?
                                 / <on !InOperator $init(Expression)>? __ ';' __ $cond(Expression)? __ ';' __ $body(Expression)?
-ForEachStatement                = { 'for' __ '(' __ addForEachPart __ ')' __ $(Statement) #Foreach }
+ForEachStatement                = { 'for' __ '(' __ addForEachPart __ ')' __ $body(Statement) #Foreach }
 addForEachPart                  = "var" __ <on !InOperator $name(VariableDeclaration)> __ "in" __ $iter(Expression)
                                 / $name(LeftHandSideExpression) __ "in" __ $iter(Expression)
 ContinueStatement               = { "continue" ( _ $label(Identifier) )? EOS #Continue `` }
 BreakStatement                  = { "break" ( _ $label(Identifier) )? EOS #Break `` }
 ReturnStatement                 = { "return" ( _ $expr(Expression) )? EOS #Return }
 ThrowStatement                  = { "throw" _ $expr(Expression) EOS #Throw }
-WithStatement                   = { 'with' __ addCondition __ $(Statement) #JSWith }
+WithStatement                   = { 'with' __ addCondition __ $body(Statement) #JSWith }
 
 /* Switch Statement */
 SwitchStatement                 = { 'switch' __ addCondition __ $body(CaseBlock) #Switch }
@@ -248,8 +248,8 @@ BitwiseOrExpression             = BitwiseXorExpression {$left __ "|" __ $right(B
 BitwiseXorExpression            = BitwiseAndExpression {$left __ "^" __ $right(BitwiseAndExpression) #BitwiseXor }*
 BitwiseAndExpression            = EqualityExpression {$left __ "&" __ $right(EqualityExpression) #BitwiseAnd }*
 EqualityExpression              = RelationalExpression {$left __ addEqualityOperator __ $right(RelationalExpression) }*
-addEqualityOperator             = '==' ('=' #StrictEquals / #Equals)
-                                / '!=' ('=' #StrictNotEquals / #NotEquals)
+addEqualityOperator             = '==' ('=' #Equals / #JSEquals)
+                                / '!=' ('=' #NotEquals / #JSNotEquals)
 RelationalExpression            = ShiftExpression {$left __ addRelationalOperator __ $right(ShiftExpression) }*
 addRelationalOperator           = '<' ('=' #LessThanEquals / #LessThan)
                                 / '>' ('=' #GreaterThanEquals / #GreaterThan)
@@ -293,8 +293,8 @@ ReceiverExpression
     / NewExpressionWithArgs
 **/
 NewExpression                   = MemberExpression
-                                / { "new" __ $(NewExpression) #JSNew }
-NewExpressionWithArgs           = { "new" __ $(MemberExpression) __ $(Arguments) #JSNew }
+                                / { "new" __ $name(NewExpression) #JSNew }
+NewExpressionWithArgs           = { "new" __ $name(MemberExpression) __ $param(Arguments) #JSNew }
 PrimaryExpression               = ThisExpression
                                 / '(' __ Expression __ ')'
                                 / Literal
@@ -313,7 +313,7 @@ addElisionList                  = $(ElisionExpression) ( __ $(ElisionExpression)
 ElisionExpression               = ',' { #Undefined }
 
 /* ObjectLiteral */
-ObjectLiteral                   = { '{' __ ( addPropertyList __ ( ',' __ )? )? '}' #Object }
+ObjectLiteral                   = { '{' __ ( addPropertyList __ ( ',' __ )? )? '}' #JSObject }
 addPropertyList                 = $(PropertyAssignment) ( __ ',' __ $(PropertyAssignment) )*
 PropertyAssignment              = { $key(PropertyName) __ ':' __ $value(AssignmentExpression) #$ }
 //                              / { "get" __ $(PropertyName) __ '(' __ ')' __ $(FunctionBody) #GetterProperty }
@@ -411,7 +411,7 @@ OCT                             = [0-7]
 SIGN                            = '+'
                                 / '-'
 StringLiteral                   = ["] { DOUBLE_STRING_CHARACTER* #String } ["]
-                                / ['] { SINGLE_STRING_CHARACTER* #Character } [']
+                                / ['] { SINGLE_STRING_CHARACTER* #String } [']
 DOUBLE_STRING_CHARACTER         = !( ["] / '\\' / LINE_TERMINATOR ) .
                                 / '\\' ESCAPE_SEQUENCE
 SINGLE_STRING_CHARACTER         = !( ['] / '\\' / LINE_TERMINATOR ) .
@@ -428,8 +428,8 @@ HEX_ESCAPE_SEQUENCE             = [xX] HEX HEX
 UNICODE_ESCAPE_SEQUUENCE        = [uU] HEX4
 
 /* Regular Expression */
-RegularExpressionLiteral        = { '/' REGEX_BODY '/' REGEX_FLAGS #JSRegExpLiteral }
-REGEX_BODY                      = REGEX_FIRST_CHAR REGEX_CHAR*
+RegularExpressionLiteral        = { '/' $body(RegexBody) '/' $flags(RegexFlags) #JSRegExpLiteral }
+RegexBody                       = {REGEX_FIRST_CHAR REGEX_CHAR* #JSRegexBody}
 REGEX_FIRST_CHAR                = REGEX_BACKSLASH_SEQUENCE
                                 / ![*\\/\x5b] REGEX_NON_TERMINATOR
                                 / REGEX_CLASS
@@ -440,7 +440,7 @@ REGEX_NON_TERMINATOR            = !LINE_TERMINATOR .
 REGEX_CLASS                     = '[' REGEX_CLASS_CHAR* ']'
 REGEX_CLASS_CHAR                = ![\x5d\\] REGEX_NON_TERMINATOR
                                 / REGEX_BACKSLASH_SEQUENCE
-REGEX_FLAGS                     = [gimsy]*
+RegexFlags                      = { ({[gimsy] #JSRegexFlag})* #List}
 
 /* Example */
 example FunctionDeclaration&SourceElement ~e7f3da '''
@@ -508,7 +508,7 @@ switch(c) {
 }
 '''
 example LabelledStatement&Statement ~d22dbd '''
-label: 
+label:
 var a = 1;
 '''
 example TryStatement&Statement ~aef7e6 '''
@@ -689,7 +689,7 @@ format #Field[*] `$[0].$[1]`
 format #Indexer[*] `$[0][$[1]]`
 format #List[*] `($[0 `, ` -1])`
 format #Array[*] `[$[0 `, ` -1]]`
-format #Object[*] `{$[0 `, ` -1]}`
+format #JSObject[*] `{$[0 `, ` -1]}`
 format #$[*] `$[0]: $[1]`
 format #GetterProperty[*] `get $[0]() $[1]`
 format #SetterProperty[*] `set $[0]($[1]) $[2]`
