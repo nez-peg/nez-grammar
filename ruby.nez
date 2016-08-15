@@ -1,80 +1,351 @@
 /*
  * Ruby 2.x
  * author : Mai MaiCuong
+ *        : Masanori Sato
 */
-File                                 = { $(CompleteStatement) #Source }
+File                                 = BRANKLINE* _ { $source(CompleteStatement) #Source }
 
 //-----------------------------------------
-EOS                                  = _ ';'
-                                     / _ LINE_TERMINATOR
-                                     / _ COMMENT LINE_TERMINATOR
-
-LINE_TERMINATOR                      = [\n\r\u2028\u2029]
-COMMENT                              = '#' ( !LINE_TERMINATOR . )*
-__                                   = SPACE_OR_NEWLINE*
-SPACE_OR_NEWLINE                     = SPACE
-                                     / LINE_TERMINATOR
-                                     / COMMENT
+EOS                                  = _ (';' / COMMENT? LINE_TERMINATOR) BRANKLINE*
 SPACE                                = [\t\v\f \u00A0\uFEFF]
-EOF                                  = !.
+                                     / ROW_CONNECTION
+LINE_TERMINATOR                      = [\n\r\u2028\u2029]
+BRANKLINE                            = _ COMMENT? LINE_TERMINATOR
+                                     / MULTI_LINE_COMMENT LINE_TERMINATOR
+COMMENT                              = '#' ( !LINE_TERMINATOR . )*
+MULTI_LINE_COMMENT                   = "=begin" ( !LINE_TERMINATOR . )* LINE_TERMINATOR MULTI_LINE_COMMENT_LINES
+MULTI_LINE_COMMENT_LINES             = "=end" ( !LINE_TERMINATOR . )*
+                                     / ( !LINE_TERMINATOR . )* LINE_TERMINATOR MULTI_LINE_COMMENT_LINES
+SP_WITH_NEWLINE                      = _ COMMENT? LINE_TERMINATOR BRANKLINE* _
+                                     / SP
+SP                                   = SPACE+
+__                                   = SP_WITH_NEWLINE?
 _                                    = SPACE*
+ROW_CONNECTION                       = '\\' LINE_TERMINATOR
+EOF                                  = !.
 
 //-------------------------------------------------------
-CompleteStatement                    = { $(StatementOrBegin) ( EOS* _ $(StatementOrBegin) )* EOS* _ #BlockExpression }
+/* Statement */
+Block                                = <if !Nondo>  DoEndBlock
+                                     / <on !onlyDecorator BraceBlock>
+DoEndBlock                           = { "do" __ $param(BlockParameter)? __ $body(CompleteStatement) __ "end" #Block }
+BraceBlock                           = { '{' __ $param(BlockParameter)? __ $body(CompleteStatement) __ '}' #Block }
+BlockParameter                       = '||' { #Empty }
+                                     / '|' __ ( BlockVar / { #Empty } ) __ '|'
+                                     / '|' __ { addParameterList #List } __ '|'
+BlockVar                             = MultipleLeftHandSideExpression
+                                     / LeftHandSideExpression
+BodyStatement                        = { addBodyStatements #BlockExpr }
+addBodyStatements                    = $main(CompleteStatement) __ $rescue(RescueList)?  __ $else(ElseClause)? ( __ "ensure" __ $ensure(CompleteStatement) )?
+RescueList                           = { $rescue(RescueClause) ( __ $rescue(RescueClause) )* #List }
+RescueClause                         = { "rescue" ( _ $class(ExceptionClassList) )? ( _ "=>" __ $target(LeftHandSideExpression) )? _ THEN __ $then(CompleteStatement) #Rescue }
+ExceptionClassList                   = MultipleRightHandSideExpression
+                                     / OperatorExpression
+CompleteStatement                    = { $statement(Statement) ( EOS+ _ $statement(Statement) )+ EOS* _ #List }
+                                     / Statement EOS* _
                                      / EOS* _ { #Empty }
-StatementOrBegin                     = InitializerStatement
-                                     / '{' __ CompleteStatement __ '}'
-                                     / DecoratorStatement
-InitializerStatement                 = { 'BEGIN' __ '{' __ $(CompleteStatement) __ '}' #Initializer }
-DecoratorStatement                   = NoDecorationStatement {$ _ addDecorator _ $(Expression) }*
+Statement                            = InitializerStatement
+                                     / NoDecorationStatement ( {$then _ addCondDecorator } / {$body _ addLoopDecorator } )*
+InitializerStatement                 = { "BEGIN" _ '{' __ $body(CompleteStatement) __ '}' #Initializer }
+addCondDecorator                     = "if" __ $cond(Expression) #IfExpr
+                                     / "unless" __ $cond(Expression) #Unless
+addLoopDecorator                     = "while" __ $cond(Expression) #While
+                                     / "until" __ $cond(Expression) #Until
+                                     / "rescue" __ $rescue(NoDecorationStatementInRescue) #Rescue
 NoDecorationStatement                = AliasStatement
                                      / UndefStatement
                                      / FinalizerStatement
+                                     / AssignmentStatement
                                      / Expression
-AliasStatement                       = { "alias" _ $(FunctionName) _ $(FunctionName) #Alias }
-UndefStatement                       = { "undef" ( _ ($(FunctionName) / $(Symbol)) )+ }
-FinalizerStatement                   = { 'END' __ '{' __ $(CompleteStatement) __ '}' #Finalizer }
-Symbol                               = ":" _ { FUNCTION_NAME #Symbol }
-                                     / ":" _ { VARIABLE_NAME #Symbol }
-addDecorator                         = "if" #IfDecorator
-                                     / "while" #WhileDecorator
-                                     / "unless" #UnlessDecorator
-                                     / "until" #UntilDecorator
-                                     / "rescue" #RescueDecorator
-Expression                           = { $(MultipleLeftHandSideExpression) __ "=" __ $(MultipleRightHandSideExpression) #MultipleAssign }
-                                     / KeywordLogicalExpression
-                                     / ControlExpression
-MultipleLeftHandSideExpression       = '(' _ MultipleLeftHandSideExpression _ ')'
-                                     / { $(LHSListItem) ( _ ',' _ $(LHSListItem) )+ ( _ ',' _ $(LHSExpandExpression) )? #MultipleLeftHandSideExpression }
-                                     / { $(LHSListItem) _ ',' _ $(LHSExpandExpression) #MultipleLeftHandSideExpression }
-                                     / { $(LHSListItem) ( _ ',' _ $(LHSListItem) )* _ ',' #MultipleLeftHandSideExpression }
+NoDecorationStatementInRescue        = AliasStatement
+                                     / UndefStatement
+                                     / FinalizerStatement
+                                     / AssignmentStatement
+                                     / NotExpression
+AliasStatement                       = { "alias" _ $newname(MethodNameOrSymbol) _ $target(MethodNameOrSymbol) #Alias }
+UndefStatement                       = { "undef" ( _ ($target(MethodNameOrSymbol)) )+ #Undef }
+MethodNameOrSymbol                   = DefinedFunctionName
+                                     / Symbol
+FinalizerStatement                   = { "END" _ '{' __ $body(CompleteStatement) __ '}' #Finalizer }
+
+// Assignment and left/right hand side expression
+AssignmentStatement                  = { $left(LeftHandForAssignSingle) _ '=' #Assign __ $right(CommandCallExpression / JumpExpressionWithArgs) }
+                                     / { $left(LeftHandForAssignCalc) _ addAbbreviatedAssignmentOperator __ $right(CommandCallExpression / JumpExpressionWithArgs) }
+                                     / { $left(LeftHandSideExpression) _ '=' __ $right(MultipleRightHandSideExpression) #MultipleAssign }
+                                     / { $left(LHSExpandExpression) _ '=' __ $right(RightHandSideExpression) #MultipleAssign }
+                                     / { $left(MultipleLeftHandSideExpression) _ '=' __ $right(MultipleRightHandSideExpression) #MultipleAssign }
+                                     / { $left(MultipleLeftHandSideExpression) _ '=' __ $right(RightHandSideExpression) #MultipleAssign }
+addAbbreviatedAssignmentOperator     = '*=' #AssignMul
+                                     / '/=' #AssignDiv
+                                     / '%=' #AssignMod
+                                     / '**=' #AssignPower
+                                     / '+=' #AssignAdd
+                                     / '-=' #AssignSub
+                                     / '<<=' #AssignLeftShift
+                                     / '>>=' #AssignRightShift
+                                     / '&=' #AssignBitwiseAnd
+                                     / '^=' #AssignBitwiseXOr
+                                     / '|=' #AssignBitwiseOr
+                                     / '&&=' #AssignAnd
+                                     / '||=' #AssignOr
+LeftHandSideExpression               = { $base(PrimaryExpressionForLeftHand) addTarget }
+                                     / PrimaryTarget
+LeftHandForAssignSingle              = { $base(PrimaryExpressionForLeftHand) addTargetForAssignSingle }
+                                     / PrimaryTarget
+LeftHandForAssignCalc                = { $base(PrimaryExpressionForLeftHand) addTargetForAssignCalc }
+                                     / VariableName
+addTarget                            = ROW_CONNECTION* '[' __ $index(IndexArguments)? __ ']' #Indexer
+                                     / ( __ '.' / _ '::') __ $name(Identifier) #Field
+addTargetForAssignSingle             = ROW_CONNECTION* '[' __ $index(IndexArguments)? __ ']' #Indexer
+                                     / ( __ '.' / _ '::') __ $name(LocalIdentifier) #Field
+                                     / ( __ '.' / '::') __ $name(ConstantIdentifier) #Field
+addTargetForAssignCalc               = ROW_CONNECTION* '[' __ $index(IndexArguments)? __ ']' #Indexer
+                                     / __ '.' __ $name(Identifier) #Field
+                                     / _ '::' __ $name(LocalIdentifier) #Field
+PrimaryTarget                        = VariableName
+                                     / ScopedConstant
+MultipleLeftHandSideExpression       = { addMultipleLHSList ( $item(LHSExpandExpression) / $item(LHSListItem) )? #MultipleLeftHandSideExpression }
+                                     / GroupingLHSExpression
                                      / LHSExpandExpression
-LHSListItem                          = LeftHandSideExpression
-                                     / '(' __ MultipleLeftHandSideExpression __ ')'
-LeftHandSideExpression               = PrimaryExpression {$ addLHSCall }+
-                                     / PrimaryLHSExpression
-PrimaryExpression                    = '(' __ CompleteStatement __ ')'
-                                     / Literal
-                                     / HereDocument
+addMultipleLHSList                   = ( $item(LHSListItem) _ ',' __ )+
+LHSListItem                          = GroupingLHSExpression
+                                     / LeftHandSideExpression
+LHSExpandExpression                  = { '*' $item(LeftHandSideExpression)? #Variadic }
+GroupingLHSExpression                = { '(' __ $item(MultipleLeftHandSideExpression) __ ')' #Grouping }
+RightHandSideExpression              = CommandCallExpression
+                                     / JumpExpressionWithArgs
+                                     / OperatorExpression
+MultipleRightHandSideExpression      = { addOperatorExpressions _ ',' __ $variadic(VariadicArgument) #MultipleRightHandSideExpression }
+                                     / { $expression(OperatorExpression) _ ',' __ addOperatorExpressions  #MultipleRightHandSideExpression }
+                                     / { $variadic(VariadicArgument) #MultipleRightHandSideExpression }
+
+/* Expression */
+Expression                           = KeywordLogicalExpression
+KeywordLogicalExpression             = NotExpression {$left _ addKeywordLogicalOperator __ $right(NotExpression) }*
+addKeywordLogicalOperator            = "and" #And
+                                     / "or" #Or
+NotExpression                        = { "not" #Not __ $base(NotExpression) }
+                                     / { "!" #Not __ $base(CommandCallExpression / JumpExpressionWithArgs) }
+                                     / AssignmentExpression
+                                     / CommandCallExpression
+                                     / JumpExpressionWithArgs
+                                     / OperatorExpression
+CommandCallExpression                = ChainedCommand {$base __ addChainMethdCallWithoutParentheses }?
+                                     / Command
+JumpExpressionWithArgs               = ReturnExpressionWithArgs
+                                     / BreakExpressionWithArgs
+                                     / NextExpressionWithArgs
+Command                              = { $base(PrimaryExpressionForCommand) _ addChainMethdCallWithoutParentheses }
+                                     / { $(DummySelf) $name(MethodOnlyName) $param(<on onlyDecorator ArgumentsWithoutParenetheses>) #Apply }
+                                     / { $(DummySelf) $name(Identifier) $param(<on onlyDecorator ArgumentsWithoutParenetheses>) #Apply }
+                                     / SuperExpressionRequireArgs
+                                     / YieldExpressionRequireArgs
+CommandWithDoBlock                   = { $base(PrimaryExpressionForCommand) _ addChainMethdCallWithoutParentheses _ $body(DoEndBlock) }
+                                     / { $(DummySelf) $name(MethodOnlyName) $param(<on onlyDecorator ArgumentsWithoutParenetheses>) _ $body(DoEndBlock) #Apply }
+                                     / { $(DummySelf) $name(Identifier) $param(<on onlyDecorator ArgumentsWithoutParenetheses>) _ $body(DoEndBlock) #Apply }
+                                     / SuperExpressionRequireBlockArgs
+ChainedCommand                       = CommandWithDoBlock {$base __ addChainMethdCall }*
+addChainMethdCall                    = ('.' / '::') __ $name(MethodName) _ $param(Arguments)? #Apply
+addChainMethdCallWithoutParentheses  = ( __ '.' / '::') __ $name(MethodName) $param(<on onlyDecorator ArgumentsWithoutParenetheses>) #Apply
+OperatorExpression                   = AssignmentExpression
+                                     / DefinedExpression
+                                     / ConditionalExpression
+addOperatorExpressions               = $expression(OperatorExpression) ( _ ',' __ $expression(OperatorExpression) )*
+AssignmentExpression                 = { $left(LeftHandForAssignSingle) _ '=' #Assign __ $right(OperatorExpression) }
+                                     / { $left(LeftHandForAssignCalc) _ addAbbreviatedAssignmentOperator __ $right(OperatorExpression) }
+                                     / { $body({ $left(LeftHandSideExpression) _ '=' #Assign __ $right(OperatorExpression) }) _ "rescue" __ $rescue(OperatorExpression) #Rescue }
+ConditionalExpression                = RangeExpression {$cond _ '?' __ $then(OperatorExpression) _ ':' __ $else(OperatorExpression) #Conditional }?
+RangeExpression                      = LogicalORExpression {$ _ addRangeOperator __ $(LogicalORExpression) }*
+addRangeOperator                     = '..' ('.' #OpenRange / #ClosedRange)
+LogicalORExpression                  = LogicalANDExpression {$left _ '||' __ $right(LogicalANDExpression) #Or }*
+LogicalANDExpression                 = EqualityExpression {$left _ '&&' __ $right(EqualityExpression) #And }*
+EqualityExpression                   = RelationalExpression {$left _ addEqualityOperator __ $right(RelationalExpression) }*
+addEqualityOperator                  = "==" #Equals
+                                     / "!=" #NotEquals
+                                     / "===" #StrictEquals
+                                     / "<=>" #Compare
+                                     / "=~" #Match
+                                     / '!~' #NotMatch
+RelationalExpression                 = BitwiseORExpression {$left _ addRelationalOperator __ $right(BitwiseORExpression) }*
+addRelationalOperator                = "<=" #LessThanEquals
+                                     / ">=" #GreaterThanEquals
+                                     / "<" #LessThan
+                                     / ">" #GreaterThan
+BitwiseORExpression                  = BitwiseANDExpression {$left _ ("|" #BitwiseOr / "^" #BitwiseXor) __ $right(BitwiseANDExpression) }*
+BitwiseANDExpression                 = ShiftExpression {$left _ "&" __ $right(ShiftExpression) #BitwiseAnd }*
+ShiftExpression                      = AdditiveExpression {$left (_ "<<" __ #LeftShift / _ ">>" __ #RightShift) $right(AdditiveExpression) }*
+AdditiveExpression                   = MultiplicativeExpression {$left _ addAdditiveOperator __ $right(MultiplicativeExpression) }*
+addAdditiveOperator                  = "+" #Add
+                                     / "-" #Sub
+MultiplicativeExpression             = UnaryMinusExpression {$left _ addMultiplicativeOperator __ $right(UnaryMinusExpression) }*
+addMultiplicativeOperator            = "*" #Mul
+                                     / "%" #Mod
+                                     / "/" #Div
+UnaryMinusExpression                 = { "-" __ $expr(PowerExpression) #Minus }
+                                     / PowerExpression
+PowerExpression                      = UnaryExpression {$base _ "**" __ $power(PowerExpression) #Power }?
+UnaryExpression                      = { addUnaryOperator __ $expr(UnaryExpression) }
+                                     / PrimaryExpression
+addUnaryOperator                     = "+" #Plus
+                                     / "~" #Invert
+                                     / "!" #Not
+PrimaryExpression                    = Primary {$base addCall }*
+PrimaryExpressionForLeftHand         = Primary {$base addCall &( ( ROW_CONNECTION* '[' / __ '.' / _ '::') ) }*
+PrimaryExpressionForCommand          = Primary {$base addCall &( __ ('.' / '::') ) }* // TODO [ . .
+PrimaryExpressionForPath             = Primary {$base addCall &( _ '::' ) }* // TODO . . ::
+addCall                              = ROW_CONNECTION* '[' __ $index(IndexArguments)? __ ']' #Indexer
+                                     / _ '::' __ $name(MethodName) _ $param(Arguments) ( _ $body(Block) )? #Apply
+                                     / __ '.' __ $name(MethodName) _ $param(Arguments)? ( _ $body(Block) )? #Apply
+                                     / _ '::' __ !CONSTANT $name(MethodName) ( _ $body(Block) )? #Apply
+                                     / '::' __ $name(ConstantIdentifier) #Field
+Primary                              = StatementLikeExpression
+                                     / PrimaryCallExpression
+                                     / '(' __ CompleteStatement __ ')'
+                                     / VariableName
+                                     / PseudoVariable
+                                     / ScopedConstant
                                      / ArrayLiteral
                                      / HashLiteral
+                                     / Literal
+                                     / HereDocument
+                                     / DefinedExpressionWithParentheses
                                      / LambdaExpression
-                                     / Variable !( _ [({] )
-                                     / PrimaryCallExpression
-                                     / ConstantExpression
-                                     / <if StatementAsPrimary> StatementLikeExpression
+StatementLikeExpression              = ClassExpression
+                                     / ModuleExpression
+                                     / FunctionDefinition
+                                     / YieldExpression
+                                     / <if !onlyDecorator> IfExpression
+                                     / <if !onlyDecorator> UnlessExpression
+                                     / CaseExpression
+                                     / <if !onlyDecorator> WhileExpression
+                                     / <if !onlyDecorator> UntilExpression
+                                     / ForExpression
+                                     / ReturnExpression
+                                     / BreakExpression
+                                     / NextExpression
+                                     / RedoExpression
+                                     / RetryExpression
+                                     / ExceptionExpression
+
+// Conditional Expressions
+DefinedExpression                    = { "defined?" __ $base(OperatorExpression) #Defined }
+DefinedExpressionWithParentheses     = { "defined?" __ '(' __ $base(Expression) __ ')' #Defined }
+// Control Expressions
+IfExpression                         = { "if" __ $cond(Expression) _ THEN __ $then(CompleteStatement) __ $else(ElseClause / ElsifClause)? __ "end" #IfExpr }
+THEN                                 = ( EOS __ )? "then"
+                                     / EOS
+ElsifClause                          = { "elsif" __ $cond(Expression) _ THEN __ $then(CompleteStatement) __ $else(ElseClause / ElsifClause)? #IfExpr }
+ElseClause                           = "else" __ CompleteStatement
+UnlessExpression                     = { "unless" __ $cond(Expression) _ THEN __ $then(CompleteStatement) __ $else(ElseClause)? __ "end" #Unless }
+WhileExpression                      = { "while" __ $cond(<on Nondo Expression>) _ DO __ $body(CompleteStatement) __ "end" #While }
+DO                                   = "do"
+                                     / EOS
+UntilExpression                      = { "until" __ $cond(<on Nondo Expression>) _ DO __ $body(CompleteStatement) __ "end" #Until }
+ForExpression                        = { "for" __ $iter(BlockVar) _ "in" __ $range(<on Nondo Expression>) _ DO __ $body(CompleteStatement) __ "end" #For }
+CaseExpression                       = { "case" __ $cond(Expression)? EOS* __ $body(CaseList) __ $else(ElseClause)? __ "end" #Case }
+CaseList                             = { $when(WhenClause) ( __ $when(WhenClause) )* #List }
+WhenClause                           = { "when" __ $cond(WhenArgs) _ THEN __ $then(CompleteStatement) #When }
+WhenArgs                             = { addOperatorExpressions ( _ ',' __ $variadic(VariadicArgument) )? #List }
+                                     / { $variadic(VariadicArgument) #List }
+ExceptionExpression                  = { "begin" __ addBodyStatements __ "end" #ExceptionBlock }
+PrimaryCallExpression                = { $(DummySelf) $name(MethodOnlyName) _ $param(Arguments)? ( _ $body(Block) )? #Apply }
+                                     / { $(DummySelf) $name(Identifier) _ $body(Block) #Apply }
+                                     / { $(DummySelf) $name(Identifier) _ $param(Arguments) ( _ $body(Block) )? #Apply }
+                                     / SuperExpression
+DummySelf                            = { `self` #Self }
+SuperExpression                      = { $(DummySelf) $super(Super) _ $param(Arguments)? ( _ $body(Block) )? #Apply }
+SuperExpressionRequireArgs           = { "super" $param(<on onlyDecorator ArgumentsWithoutParenetheses>) #Super }
+SuperExpressionRequireBlockArgs      = { "super" $param(<on onlyDecorator ArgumentsWithoutParenetheses>) _ $body(DoEndBlock) #Super }
+Super                                = { "super" #Super }
+YieldExpression                      = { "yield" ( '(' __ $param(ArgumentListWithoutProcedure) __ ')' )? #Yield }
+YieldExpressionRequireArgs           = { "yield" _ $param(<on onlyDecorator ArgumentListWithoutProcedure>) !( _ '{' ) #Yield }
+ReturnExpression                     = { "return" #Return }
+ReturnExpressionWithArgs             = { "return" _ $param(<on onlyDecorator ArgumentListWithoutProcedure>) #Return }
+BreakExpression                      = { "break" #Break }
+BreakExpressionWithArgs              = { "break" _ $param(<on onlyDecorator ArgumentListWithoutProcedure>) #Break }
+NextExpression                       = { "next" #Next }
+NextExpressionWithArgs               = { "next" _ $param(<on onlyDecorator ArgumentListWithoutProcedure>) #Next }
+RedoExpression                       = { "redo"  #Redo }
+RetryExpression                      = { "retry" #Retry }
+
+LambdaExpression                     = { '->' _ $param( { ( '(' _ addParameterList _ ')' / addParameterList ) #List } )? _ $body(BraceBlock) #Lambda }
+
+// Class, Module
+ClassExpression                      = { "class" __ $name(Path) ( _ "<" __ $super(SuperClass) )? EOS __ $body(BodyStatement) __ "end" #Class }
+                                     / { "class" __ "<<" __ $path(Expression) EOS __ $body(BodyStatement) __ "end" #SClass } // StaticClass
+Path                                 = ScopedConstant
+                                     / { $path(PrimaryExpressionForPath) _ '::' __ $name(ConstantIdentifier) #NestedName }
+                                     / ConstantIdentifier
+SuperClass                            = Expression
+ModuleExpression                     = { "module" __ $name(Path) __ $body(BodyStatement) __ "end" #Module }
+
+// Function
+FunctionDefinition                   = { "def" __ $name(DefinedFunctionName) _ $param(FunctionParameters) __ $body(BodyStatement) __ "end" #FuncDecl } // TODO avoid cannot inner func nonterminal
+                                     / { "def" __ $path(TargetClass) __ ('.' / '::') __ $name(DefinedFunctionName) _ $param(FunctionParameters) __ $body(BodyStatement) __ "end" #SFuncDecl } // StaticFunction
+DefinedFunctionName                  = AssignmentLikeMethodName
+                                     / MethodName
+FunctionParameters                   = '(' { __ addParameterList? #List } __ ')' EOS?
+                                     / { addParameterList? #List } EOS
+// TODO add ruby 2.0 expression ( keyword arguments, option hash)
+addParameterList                     = $papam(ProcedureParameter)
+                                     / $param(VariadicParameter) ( __ ',' __ $param(ProcedureParameter) )?
+                                     / addOptionalParameters ( __ ',' __ $param(VariadicParameter) )? ( __ ',' __ $param(ProcedureParameter) )?
+                                     / $param( { $name(LocalIdentifier) #Param } ) ( __ ',' __ addParameterList )?
+addOptionalParameters                = $param(OptionalParameter) ( __ ',' __ $param(OptionalParameter) )*
+OptionalParameter                    = { $name(LocalIdentifier) __ "=" __ $default(OperatorExpression) #OptionalParam }
+VariadicParameter                    = { "*" ( __ $name(LocalIdentifier) )? #VariadicParam }
+ProcedureParameter                   = { "&" __ $name(LocalIdentifier) #ProcedureParam }
+TargetClass                          = VariableName
+                                     / PseudoVariable
+                                     / '(' __ Expression __ ')'
+
+// Arguments
+Arguments                            = '(' __ ')'
+                                     / '(' { __ $command(ChainedCommand) #List } ( _ ',' __ )?__ ')'
+                                     / '(' { __ addOperatorExpressions _ ',' __ $command(ChainedCommand) #List } ( _ ',' __ )? __ ')'
+                                     / '(' { __ addArgumentList #List } __ ( _ ',' __ )? ')'
+
+
+ArgumentsWithoutParenetheses         = !addFaultAvoider _ { addArgumentList #List } //!( _ '{' )
+addFaultAvoider                      = [(&+*/%]
+                                     / '<<' / '-' / '['
+                                     / _ [&+*/%] SP
+                                     / _ ( '<<' / '-' ) SP
+addArgumentList                      = $command(Command)
+                                     / $procedure(ProcedureArgument)
+                                     / $variadic(VariadicArgument) ( __ ',' __ $procedure(ProcedureArgument) )?
+                                     / addAssocs ( _ ',' __ $variadic(VariadicArgument) )? ( _ ',' __ $procedure(ProcedureArgument) )?
+                                     / $expression(OperatorExpression) ( _ ',' __ addArgumentListWithoutCommand)?
+addArgumentListWithoutCommand        = $procedure(ProcedureArgument)
+                                     / $variadic(VariadicArgument) ( __ ',' __ $procedure(ProcedureArgument) )?
+                                     / addAssocs ( _ ',' __ $variadic(VariadicArgument) )? ( _ ',' __ $procedure(ProcedureArgument) )?
+                                     / $expression(OperatorExpression) ( _ ',' __ addArgumentListWithoutCommand)?
+ArgumentListWithoutProcedure         = { $command(Command) #List }
+                                     / { $variadic(VariadicArgument) #List }
+                                     / { addAssocs ( _ ',' __ $variadic(VariadicArgument) )? #List }
+                                     / { $expression(OperatorExpression) ( _ ',' __ addArgumentListWithoutProcCom )? #List }
+addArgumentListWithoutProcCom        = $variadic(VariadicArgument)
+                                     / addAssocs ( _ ',' __ $variadic(VariadicArgument) )?
+                                     / $expression(OperatorExpression) ( _ ',' __ addArgumentListWithoutProcCom )?
+VariadicArgument                     = { '*' __ $base(OperatorExpression) #Variadic }
+ProcedureArgument                    = { "&" __ $base(OperatorExpression) #Procedure }
+IndexArguments                       = { $command(Command) #List }
+                                     / { $variadic(VariadicArgument) #List }
+                                     / { addAssocs ( _ ',' )? #List }
+                                     / { addOperatorExpressions ( _ ',' __ $variadic(VariadicArgument)? )? #List }
 
 /* Literal */
 Literal                              = NumericLiteral
                                      / StringLiteral
+                                     / CommandStringLiteral
                                      / RegularExpressionLiteral
                                      / Symbol
                                      / ParcentNotation
 NumericLiteral                       = HexIntegerLiteral
                                      / BinaryIntegerLiteral
                                      / FloatingPointLiteral
-                                     / DecimalLiteral
                                      / OctalIntegerLiteral
+                                     / DecimalLiteral
 HexIntegerLiteral                    = { '0' [xX] HEX+ #HexInteger }
 BinaryIntegerLiteral                 = { '0' [bB] [01_]+ #BinaryInteger }
 FloatingPointLiteral                 = { DECIMAL_INTEGER '.' DIGIT+ EXPONENT_PART? #Float }
@@ -86,14 +357,19 @@ SIGN                                 = '+'
                                      / '-'
 DecimalLiteral                       = { [1-9] DIGIT* #Integer }
                                      / '0' [dD] { DIGIT+ #Integer }
-OctalIntegerLiteral                  = { '0' ([oO] OCT+ / OCT*) #OctalInteger }
+                                     / { '0' #Integer }
+OctalIntegerLiteral                  = { '0' [oO]? OCT+ #OctalInteger }
 OCT                                  = [0-7_]
-StringLiteral                        = ["] { DOUBLE_STRING_CHARACTER* #String } ["]
+StringLiteral                        = { ["] $String( { DoubleStringCharacter* #String } ) ["] ( _ ["] $String( { DoubleStringCharacter* #String } ) ["] )+  #ConnectString }
+                                     / ["] { DoubleStringCharacter* #String } ["]
                                      / ['] { SINGLE_STRING_CHARACTER* #String } [']
-                                     / [`] { BACK_STRING_CHARACTER* #Command } [`]
-                                     / '?' { '\\' ESCAPE_SEQUENCE / !SPACE_OR_NEWLINE . #String }
-DOUBLE_STRING_CHARACTER              = !( ["] / '\\' / LINE_TERMINATOR ) SOURCE
+CommandStringLiteral                 = [`] { BACK_STRING_CHARACTER* #Command } [`]
+DoubleStringCharacter                = !( ["] / '\\' / '#' ) SOURCE
+                                     / '#' ![$@{]
                                      / '\\' ESCAPE_SEQUENCE
+                                     / '#' InnerExpression
+InnerExpression                      = ( '$' / '@' / '@@' ) $inner(Identifier)
+                                     / '{' __ $inner(CompleteStatement) __ '}'
 SOURCE                               = .
 ESCAPE_SEQUENCE                      = '\\'
                                      / ["'bfnrtv]
@@ -107,12 +383,12 @@ HEX_ESCAPE_SEQUENCE                  = [xX] HEX HEX
 UNICODE_ESCAPE_SEQUUENCE             = [uU] HEX4
 SINGLE_STRING_CHARACTER              = !( ['] / '\\' / LINE_TERMINATOR ) SOURCE
                                      / '\\' ESCAPE_SEQUENCE
-BACK_STRING_CHARACTER                = !( [`] / '\\' / LINE_TERMINATOR ) SOURCE
+BACK_STRING_CHARACTER                = !( [`] / '\\' ) SOURCE
                                      / '\\' ESCAPE_SEQUENCE
-RegularExpressionLiteral             = { '/' REGEX_BODY? '/' REGEX_FLAGS #RegularExp }
+RegularExpressionLiteral             = { '/' REGEX_BODY? '/' REGEX_FLAGS #Regex }
 REGEX_BODY                           = REGEX_FIRST_CHAR REGEX_CHAR*
 REGEX_FIRST_CHAR                     = REGEX_BACKSLASH_SEQUENCE
-                                     / ![*\\/\x5b] REGEX_NON_TERMINATOR
+                                     / ![*\\/\x5b] SOURCE
                                      / REGEX_CLASS
 REGEX_BACKSLASH_SEQUENCE             = '\\' REGEX_NON_TERMINATOR
 REGEX_NON_TERMINATOR                 = !LINE_TERMINATOR SOURCE
@@ -121,182 +397,34 @@ REGEX_CLASS_CHAR                     = ![\x5d\\] REGEX_NON_TERMINATOR
                                      / REGEX_BACKSLASH_SEQUENCE
 REGEX_CHAR                           = '*'
                                      / REGEX_FIRST_CHAR
-REGEX_FLAGS                          = [gimsy]*
+REGEX_FLAGS                          = [egimnosuxy]*
 ParcentNotation                      = { "%" [wWiI] PN_BODY #ParcentNotation }
-                                     / { "%" [qQxrs]? PN_BODY #ParcentNotation }
-PN_BODY                              = PN_PAREN
-                                     / PN_BRACE
-                                     / PN_BRAKET
-                                     / PN_ANGLE
-                                     / ' ' ( !' ' . )* ' '
-                                     / ( !LINE_TERMINATOR . )*
-PN_PAREN                             = '(' ( PN_PAREN / ![()] . )* ')'
-PN_BRACE                             = '{' ( PN_BRACE / ![{}] . )* '}'
-PN_BRAKET                            = '[' ( PN_BRAKET / ![\[\]] . )* ']'
-PN_ANGLE                             = "<" ( PN_ANGLE / ![<>] . )* ">"
-HereDocument                         = { "<<" "-"? (["] ["] / ['] ['] / [`] [`]) ( !HD_NEWLINE . )* HD_NEWLINE ( ( !HD_NEWLINE . )* HD_NEWLINE )* _ HD_NEWLINE #HereDocument }
-HD_NEWLINE                           = LINE_TERMINATOR
-ArrayLiteral                         = { '[' ( __ addArgsNoAssoc ( __ ',' __ $({ addAssocs #Hash }) )? )? __ ( ',' __ )? ']' #Array }
-                                     / { '[' ( __ $({ addAssocs #Hash }) )? __ ( ',' __ )? ']' #Array }
-HashLiteral                          = { '{' __ ( addAssocs ( __ ',' __ )? )? __ '}' #Hash }
-LambdaExpression                     = { '->' __ addLambdaParameter __ $(LambdaBody) #Function }
-addLambdaParameter                   = '(' __ $(ParamOrEmptyList) __ ')'
-                                     / $(ParamOrEmptyList)
-ParamOrEmptyList                     = ParameterList
-                                     / EmptyList
-ParameterList                        = { $(BlockParameter) #List }
-                                     / { $(VariadicParameter) ( __ "," __ $(BlockParameter) )? #List }
-                                     / { addParameterAssocs ( __ "," __ $(VariadicParameter) )? ( __ "," __ $(BlockParameter) )? #List }
-                                     / { addParameters ( __ "," __ addParameterAssocs )? ( __ "," __ $(VariadicParameter) )? ( __ "," __ $(BlockParameter) )? #List }
-VariadicParameter                    = { "*" $(Identifier) #VariadicParameter }
-addParameterAssocs                   = $(DefaultValueAssociation) ( __ "," __ $(DefaultValueAssociation) )*
-DefaultValueAssociation              = { $(Identifier) __ "=" __ $(Arg) #Assign }
-addParameters                        = $(Identifier) !( _ [=] ) ( __ "," __ $(Identifier) !( _ "=" ) )*
-EmptyList                            = { #List }
-LambdaBody                           = DoEndBlockWithoutParameter
-                                     / BraceBlockWithoutParameter
-DoEndBlockWithoutParameter           = "do" __ CompleteStatement __ "end"
-BraceBlockWithoutParameter           = '{' __ CompleteStatement __ '}'
-PrimaryCallExpression                = { $(DummySelf) $(OperationName) _ AddArguments #Apply }
-                                     / { $(DummySelf) $(Super) ( _ AddArguments )? #Apply }
-Super                                = { "super" #Super }
-StatementLikeExpression              = IfExpression
-                                     / UnlessExpression
-                                     / WhileExpression
-                                     / UntilExpression
-                                     / CaseExpression
-                                     / ForExpression
-                                     / BeginExpression
-                                     / ClassExpression
-                                     / ModuleExpression
-                                     / FunctionDefinition
-                                     / EigenMethodDefinition
-IfExpression                         = { "if" _ $cond(Expression) _ THEN __ $then(CompleteStatement) ( elseClause / elsifClause )? _ "end" #If }
-elsifClause                          = $(ElsifClause)
-ElsifClause                          = { "elsif" _ $cond(Expression) _ THEN __ $then(CompleteStatement) ( elseClause / elsifClause )? #If }
-elseClause                           = "else" EOS* _ $else(CompleteStatement)
-UnlessExpression                     = { "unless" _ $cond(Expression) _ THEN __ $else(CompleteStatement) __ elseClause? __ "end" #Unless }
-THEN                                 = "then"
-                                     / EOS ( __ "then" )?
-WhileExpression                      = { "while" _ <on !DoExpr $cond(Expression) > _ DO __ $body(CompleteStatement) __ "end" #While }
-DO                                   = "do"
-                                     / EOS ( __ "do" )?
-UntilExpression                      = { "until" _ <on !DoExpr $(Expression) > _ DO __ $(CompleteStatement) __ "end" #Until }
-CaseExpression                       = { "case" _ $(Expression) EOS __ $(CaseList) __ elseClause? __ "end" #Case }
-CaseList                             = { ( "when" _ $(WhenArgs) _ THEN __ $(CompleteStatement) __ )* #CaseList }
-WhenArgs                             = { $(Args) ( _ ',' __ $(ExpandExpression) )? #List }
-                                     / { $(ExpandExpression) #List }
-ForExpression                        = { "for" _ $(BlockVar) _ "in" _ <on !DoExpr $(Expression)> _ DO __ $(CompleteStatement) __ "end" #For }
-BeginExpression                      = { "begin" __ ( EOS __ )? addBeginBody __ "end" #Begin }
-addBeginBody                         = $(CompleteStatement) ( __ EOS )? ( __ $(RescueList) )? ( __ "else" EOS __ $(CompleteStatement) )? ( __ "ensure" __ $(CompleteStatement) )?
-RescueList                           = { $(RescueItem)+ ( __ EOS )? #List }
-RescueItem                           = { "rescue" _ ( $(Args) _ )? ( "=>" _ $(LeftHandSideExpression) _ )? THEN __ $(CompleteStatement) #Rescue }
-ClassExpression                      = { "class" __ $(Identifier) ( __ "<" __ $(BaseClass) )? EOS __ $(CompleteStatement) __ "end" #Class }
-BaseClass                            = Expression
-ModuleExpression                     = { "module" __ $(Identifier) __ $(CompleteStatement) __ "end" #Module }
-FunctionDefinition                   = { "def" __ $name(FunctionName) _ addFunctionParameter __ $body(FunctionBody) __ "end" #FuncDecl }
-addFunctionParameter                 = '(' __ $param(ParamOrEmptyList) __ ')' EOS?
-                                     / $param(ParamOrEmptyList) EOS
-FunctionBody                         = { addBeginBody #Begin }
-EigenMethodDefinition                = { "def" __ $(Singleton) __ ('.' / '::') __ $(FunctionName) _ addFunctionParameter __ $(FunctionBody) __ "end" #EigenFunction }
-Singleton                            = VariableName
-                                     / SelfExpression
-                                     / NilExpression
-                                     / TrueExpression
-                                     / FalseExpression
-                                     / '(' __ Expression __ ')'
-addLHSCall                           = '[' __ $(Args)? __ ']' #Indexer
-                                     / _ addFuncName ( _ AddArguments &NEXT_CALL )? #Apply
-Args                                 = { addArgs #List }
-addArgs                              = $(Arg) ( __ ',' __ $(Arg) )*
-Arg                                  = AssignmentExpression
-AssignmentExpression                 = { $left(LeftHandSideExpression) _ addAssignmentOperator __ ($right(Command) / $right(UnwrapedArray) / $right(AssignmentExpression)) }
-                                     / ConditionalExpression
-addAssignmentOperator                = '=' #Assign
-                                     / '*=' #AssignMul
-                                     / '/=' #AssignDiv
-                                     / '%=' #AssignMod
-                                     / '**=' #AssignPower
-                                     / '+=' #AssignAdd
-                                     / '-=' #AssignSub
-                                     / '<<=' #AssignLeftShift
-                                     / '>>=' #AssignRightShift
-                                     / '&=' #AssignBitwiseAnd
-                                     / '^=' #AssignBitwiseXOr
-                                     / '|=' #AssignBitwiseOr
-                                     / '&&=' #AssignAnd
-                                     / '||=' #AssignOr
-Command                              = { $(DummySelf) $name(OperationName) !'[' !OPERATOR _ addCmdArguments #Apply }
-                                     / { $(DummySelf) $name(OperationName2) !'[' !OPERATOR _ addCmdArguments? #Apply }
-                                     / { $(BeforeCommandFunctionCallExpression) _ addFuncName _ addCmdArguments #Apply }
-                                     / { "super" ( _ $(CmdArgs) )? #Super }
-                                     / { "defined?" _ $(Arg) #Defined }
-DummySelf                            = { `self` #Self }
-OperationName                        = { IDENTIFIER [!?]? #Name }
-OPERATOR                             = "|"
-                                     / "^"
-                                     / "&"
-                                     / "<=>"
-                                     / "=="
-                                     / "==="
-                                     / "=~"
-                                     / ">"
-                                     / ">="
-                                     / "<"
-                                     / "<="
-                                     / "+"
-                                     / "-"
-                                     / "*"
-                                     / "/"
-                                     / "%"
-                                     / "**"
-                                     / "<<"
-                                     / ">>"
-                                     / "~"
-                                     / "`"
-                                     / "+@"
-                                     / "-@"
-                                     / "[]"
-                                     / "[]="
-addCmdArguments                      = $param(CmdArgs) ( _ $(BlockArgument) )?
-                                     / $(BlockArgument)
-CmdArgs                              = !'{' { (CmdArg (_ ',' _ CmdArg)* ) #List }
-CmdArg                               = !WhileExpression !IfExpression !UntilExpression !UnlessExpression $(AssignmentExpression)
-DoEndBlock                           = <if DoExpr> { "do" __ ( "|" __ $(BlockVar)? __ "|" __ )? $(CompleteStatement)? __ "end" #BlockArgument }
-BlockVar                             = MultipleLeftHandSideExpression
-                                     / { $(LeftHandSideExpression) #MultipleLeftHandSideExpression }
-BlockArgument                        = DoEndBlock
-                                     / BraceBlock
-BraceBlock                           = { '{' __ ( '|' __ $(BlockVar)? __ '|' __ )? $(CompleteStatement)? __ '}' #BlockArgument }
-OperationName2                       = { IDENTIFIER [!?] #Name }
-BeforeCommandFunctionCallExpression  = { {$ $(AddBeforeCommandCall) }* }
-AddBeforeCommandCall                 = { '[' __ $(Args)? __ ']' #Indexer }
-                                     / { _ addFuncName (_ AddArguments / &NEXT_CALL) #Apply }
-addFuncName                          = '.' __ $(OperationName)
-                                     / '.' __ $(IdentifierName)
-                                     / '::' __ $(Identifier)
-                                     / ('.' / '::') __ $(FunctionName)
-AddArguments                         = '(' __ ( $(CallArgs) __ )? ')' ( __ $(BlockArgument) )?
-                                     / $(BlockArgument)
-CallArgs                             = CallArgsBody
-CallArgsBody                         = { $(Command) #List }
-                                     / { $(BlockParameter) #List }
-                                     / { $(ExpandExpression) ( __ "," __ $(BlockParameter) )? #List }
-                                     / { addAssocs ( __ "," __ $(ExpandExpression) )? ( __ "," __ $(BlockParameter) )? #List }
-                                     / { addArgsNoAssoc ( __ "," __ addAssocs )? ( __ "," __ $(ExpandExpression) )? ( __ "," __ $(BlockParameter) )? #List }
-                                     / Args
-BlockParameter                       = { "&" ($(Identifier) / $(Symbol)) #BlockParameter }
-addAssocs                            = $(Association) ( __ "," __ $(Association) )*
-Association                          = { $(Arg) __ "=>" __ $(Arg) #Assign }
-                                     / { $(JsonStyleAssocSymbol) _ ":" __ $(Arg) #Assign }
-addArgsNoAssoc                       = $(Arg) !( _ "=>" ) ( __ "," __ $(Arg) !( _ "=>" ) )*
-JsonStyleAssocSymbol                 = { FUNCTION_NAME #Symbol }
-                                     / { VARIABLE_NAME #Symbol }
-FunctionName                         = { FUNCTION_NAME #Name }
-FUNCTION_NAME                        = IDENTIFIER [!?]?
-                                     / OPERATOR
-                                     / ('__LINE__' / '__FILE__' / 'BEGIN' / 'END') [!?]?
-                                     / KEYWORD [!?]?
+                                     / { '%r' PN_BODY REGEX_FLAGS #RegularExp }
+                                     / { "%" [qQxs]? PN_BODY #ParcentNotation }
+PN_BODY                              = '(' PN_PAREN ')'
+                                     / '{' PN_BRACE '}'
+                                     / '[' PN_BRAKET ']'
+                                     / '<' PN_ANGLE '>'
+                                     / <block ( <symbol PN_DELIMITER> ( !<match PN_DELIMITER> . )* <match PN_DELIMITER> )>
+PN_PAREN                             = ( '(' PN_PAREN ')' / ![()] . )*
+PN_BRACE                             = ( '{' PN_BRACE '}' / ![{}] . )*
+PN_BRAKET                            = ( '[' PN_BRAKET ']' / ![\[\]] . )*
+PN_ANGLE                             = ( '<' PN_ANGLE '>' / ![<>] . )*
+PN_DELIMITER                         = ![_0-9a-zA-Z] .
+HereDocument                         = <block ( "<<" <symbol HD_DELIMITER> ( !LINE_TERMINATOR . )* LINE_TERMINATOR { HD_BODYLINE* #HereDocument } HD_ENDLINE )>
+                                     / <block ( "<<" "-" <symbol HD_DELIMITER> ( !LINE_TERMINATOR . )* LINE_TERMINATOR { ( _ HD_BODYLINE )* #HereDocument } _ HD_ENDLINE )>
+HD_DELIMITER                         = IDENTIFIER_PART+
+                                     / '\'' ( !( '\'' / LINE_TERMINATOR ) . )* '\''
+                                     / '"' ( !( '"' / LINE_TERMINATOR ) . )* '"'
+                                     / '`' ( !( '"' / LINE_TERMINATOR ) . )* '`'
+HD_BODYLINE                          = !<match HD_DELIMITER> ( !LINE_TERMINATOR . )* LINE_TERMINATOR
+HD_ENDLINE                           = <match HD_DELIMITER> &LINE_TERMINATOR
+
+ArrayLiteral                         = { '[' __ $index(IndexArguments)? __ ']' #Array }
+HashLiteral                          = { '{' __ ( addAssocs _ )? ','? __ '}' #List }
+addAssocs                            = $hash(Association) ( _ ',' __ $hash(Association) )*
+Association                          = { $key(OperatorExpression) _ "=>" __ $value(OperatorExpression) #Hash }
+                                     / { $key(SymbolForHash) __ $value(OperatorExpression) #Hash }
 
 example IfExpression '''
 if a > 100 && b.zero? then
@@ -346,12 +474,14 @@ end
 example ForExpression '''
 for for_cnt in 1..5 do
   loop_num += 1
-  puts "(1) loop_num: #{loop_num}, for_count:#{for_cnt}"
   next if loop_num == 2
   redo if loop_num == 4
+  puts "(1) loop_num: #{loop_num}, for_count:#{for_cnt}"
   puts "(2) loop_num: #{loop_num}, for_count:#{for_cnt}"
 end
 '''
+
+example Statement next if loop == 2
 
 example WhileExpression '''
 while num < 5 do
@@ -367,7 +497,7 @@ until num < 3 do
 end
 '''
 
-example BeginExpression '''
+example ExceptionExpression '''
 begin
   puts "a" + 4  #文字列と数値の足し算のため例外発生
 rescue => ex
@@ -380,7 +510,7 @@ ensure
 end
 '''
 
-example BeginExpression '''
+example ExceptionExpression '''
 begin
   raise "Exception!"
 rescue => ex
@@ -389,45 +519,6 @@ rescue => ex
   ex.backtrace.each{|trace| puts trace}
 end
 '''
-
-UnwrapedArray                        = { add2MoreArgs #Array }
-add2MoreArgs                         = $(Arg) ( __ ',' __ $(Arg) )+
-ConditionalExpression                = RangeExpression {$ _ '?' __ $(RangeExpression) __ ':' __ $(RangeExpression) #Trinary }*
-RangeExpression                      = { $(LogicalORExpression) _ addRangeOperator __ $(LogicalORExpression) }
-                                     / LogicalORExpression
-addRangeOperator                     = '..' ('.' #OpenRange / #ClosedRange)
-LogicalORExpression                  = LogicalANDExpression {$left _ '||' __ $right(LogicalANDExpression) #Or }*
-LogicalANDExpression                 = EqualityExpression {$left _ '&&' __ $right(EqualityExpression) #And }*
-EqualityExpression                   = RelationalExpression {$left _ addEqualityOperator __ $right(RelationalExpression) }*
-addEqualityOperator                  = "==" #Equals
-                                     / "!=" #NotEquals
-                                     / "===" #StrictEquals
-                                     / "<=>" #Compare
-                                     / "=~" #Match
-                                     / '!~' #NotMatch
-RelationalExpression                 = BitwiseORExpression {$left _ addRelationalOperator __ $right(BitwiseORExpression) }*
-addRelationalOperator                = "<=" #LessThanEquals
-                                     / ">=" #GreaterThanEquals
-                                     / "<" #LessThan
-                                     / ">" #GreaterThan
-BitwiseORExpression                  = BitwiseANDExpression {$left _ ("|" #BitwiseOr / "^" #BitwiseXor) __ $right(BitwiseANDExpression) }*
-BitwiseANDExpression                 = ShiftExpression {$left (SPACE+ "&" SPACE_OR_NEWLINE+ / "&" __) $right(ShiftExpression) #BitwiseAnd }*
-ShiftExpression                      = AdditiveExpression {$left (SPACE+ "<<" SPACE_OR_NEWLINE+ #LeftShift / "<<" __ #LeftShift / _ ">>" __ #RightShift) $right(AdditiveExpression) }*
-AdditiveExpression                   = MultiplicativeExpression {$left (SPACE+ addAdditiveOperator SPACE_OR_NEWLINE+ / addAdditiveOperator __) $right(MultiplicativeExpression) }*
-addAdditiveOperator                  = "+" #Add
-                                     / "-" #Sub
-MultiplicativeExpression             = UnaryMinusExpression {$left (SPACE+ addMultiplicativeOperator SPACE_OR_NEWLINE+ / addMultiplicativeOperator __) $right(UnaryMinusExpression) }*
-addMultiplicativeOperator            = "*" #Mul
-                                     / "%" #Mod
-                                     / "/" #Div
-UnaryMinusExpression                 = PowerExpression
-                                     / { _ "-" #Minus _ $expr(UnaryMinusExpression) }
-PowerExpression                      = UnaryExpression {$ _ "**" #Power __ $(UnaryExpression) }*
-UnaryExpression                      = FunctionCallExpression
-                                     / { addUnaryOperator $expr(UnaryExpression) }
-addUnaryOperator                     = "+" #Plus
-                                     / "~" #Invert
-                                     / "!" #Not
 
 example Expression 1+2
 example Expression 1-2
@@ -456,142 +547,162 @@ example Expression a ^ b
 example Expression a >> b
 example Expression a << b
 
-FunctionCallExpression               = PrimaryExpression {$ addCall }*
-addCall                              = '[' __ $(Args)? __ ']' #Indexer
-                                     / _ addFuncName ( _ AddArguments)? #Apply
-NEXT_CALL                            = '['
-                                     / _ '.'
-                                     / _ '::'
-
 example Expression print a
 example Expression print a, b, c
-example FunctionCallExpression print(a)
-example FunctionCallExpression print(a, b, c)
+example PrimaryExpression print(a)
+example PrimaryExpression print(a, b, c)
 example Expression a[0]
 
-PrimaryLHSExpression                 = Variable !( _ [({] )
-                                     / ConstantExpression
-Variable                             = VariableName
-                                     / SelfExpression
+/* Identifier */
+Identifier                           = { IDENTIFIER #Name }
+IDENTIFIER                           = !KEYWORD IDENTIFIER_START IDENTIFIER_PART* ![:!?]
+IDENTIFIER_START                     = [a-zA-Z_]
+IDENTIFIER_PART                      = IDENTIFIER_START
+                                     / DIGIT
+DIGIT                                = [0-9_]
+LocalIdentifier                      = { LOCALIDENTIFIER #Name }
+LOCALIDENTIFIER                      = !KEYWORD LOCALIDENTIFIER_START IDENTIFIER_PART* ![!?]
+LOCALIDENTIFIER_START                = [a-z_]
+
+VariableName                         = { VARIABLE_IDENTIFIER #Name }
+VARIABLE_IDENTIFIER                  = !KEYWORD ( '$' / '@@' / '@' )? IDENTIFIER_START IDENTIFIER_PART* ![!?]
+PseudoVariable                       = SelfExpression
                                      / NilExpression
                                      / TrueExpression
                                      / FalseExpression
+                                     / EncodingExpression
                                      / FileExpression
                                      / LineExpression
-VariableName                         = { VARIABLE_NAME #Name }
-VARIABLE_NAME                        = GLOBAL_VARIABLE_NAME ![!?]
-                                     / ( '@@' / '@' )? IDENTIFIER ![!?]
-GLOBAL_VARIABLE_NAME                 = '$' IDENTIFIER
-                                     / '$' !SPACE .
-                                     / '$-' !SPACE .
+                                     / MatchedRegex
+                                     / BuiltInVariable
 SelfExpression                       = { "self" ![!?] #Self }
 TrueExpression                       = { "true" ![!?] #True }
 FalseExpression                      = { "false" ![!?] #False }
 NilExpression                        = { "nil" ![!?] #Nil }
-FileExpression                       = { '__FILE__' ![!?] #File }
-LineExpression                       = { '__LINE__' ![!?] #Line }
-ConstantExpression                   = { '::' _ $(Identifier) #Name }
-Identifier                           = !KEYWORD IdentifierName
-KEYWORD                              = "do"
-                                     / "end"
-                                     / "return"
-                                     / "yield"
-                                     / "defined?"
-                                     / "if"
-                                     / "elsif"
-                                     / "else"
-                                     / "unless"
-                                     / "while"
-                                     / "until"
-                                     / "case"
-                                     / "when"
-                                     / "break"
-                                     / "next"
-                                     / "redo"
-                                     / "for"
-                                     / "in"
-                                     / "begin"
-                                     / "rescue"
-                                     / "rescue"
-                                     / "retry"
-                                     / "ensure"
-                                     / "class"
-                                     / "module"
-                                     / "def"
-                                     / "alias"
+EncodingExpression                   = { "__ENCODING__" ![!?] #Encoding }
+FileExpression                       = { "__FILE__" ![!?] #File }
+LineExpression                       = { "__LINE__" ![!?] #Line }
+MatchedRegex                         = { '$' ( [1-9] [1-0]* ) #MatchedRegex }
+BuiltInVariable                      = { '$' ( [&~`'+?!@/\\,;.<>0*$:"] ) #BuiltInVariable }
+SCOPED_CONSTANT                      = '::' __ CONSTANT
+ScopedConstant                       = '::' __ { CONSTANT #Name }
+CONSTANT                             = !KEYWORD [A-Z] IDENTIFIER_PART* ![!?]
+ConstantIdentifier                   = { CONSTANT #Name }
+
+MethodOnlyName                       = { METHOD_ONLY_IDENTIFIER #Name }
+METHOD_ONLY_IDENTIFIER               = IDENTIFIER_START IDENTIFIER_PART* [!?]
+MethodName                           = { METHOD_NAME #Name }
+METHOD_NAME                          = OPERATOR
+                                     / METHOD_ONLY_IDENTIFIER
+                                     / KEYWORD
+                                     / IDENTIFIER
+AssignmentLikeMethodName             = { ASSIGNMENT_LIKE_METHOD_IDENTIFIER #Name }
+ASSIGNMENT_LIKE_METHOD_IDENTIFIER    = IDENTIFIER "="
+
+Symbol                               = ':' _ { SYMBOL_NAME #Name }
+SymbolForHash                        = { SYMBOL_NAME #Name } ":"
+SYMBOL_NAME                          = OPERATOR
+                                     / KEYWORD
+                                     / ["] DoubleStringCharacter* ["]
+                                     / ['] SINGLE_STRING_CHARACTER* [']
+                                     / ASSIGNMENT_LIKE_METHOD_IDENTIFIER
+                                     / METHOD_ONLY_IDENTIFIER
+                                     / VARIABLE_IDENTIFIER
+
+OPERATOR                             = "^"
+                                     / "&"
+                                     / "|"
+                                     / "<=>"
+                                     / "=="
+                                     / "==="
+                                     / "=~"
+                                     / ">"
+                                     / ">="
+                                     / "<"
+                                     / "<="
+                                     / "<<"
+                                     / ">>"
+                                     / "+"
+                                     / "-"
+                                     / "*"
+                                     / "/"
+                                     / "%"
+                                     / "**"
+                                     / "~"
+                                     / "+@"
+                                     / "-@"
+                                     / "[]"
+                                     / "[]="
+                                     / "`"
+
+KEYWORD                              = "alias"
                                      / "and"
-                                     / "defined"
+                                     / "begin"
+                                     / "break"
+                                     / "case"
+                                     / "class"
+                                     / "def"
+                                     / "defined?"
+                                     / "do"
+                                     / "else"
+                                     / "elsif"
+                                     / "end"
+                                     / "ensure"
+                                     / "for"
                                      / "false"
+                                     / "if"
+                                     / "in"
+                                     / "module"
+                                     / "next"
                                      / "nil"
                                      / "not"
                                      / "or"
+                                     / "redo"
+                                     / "rescue"
+                                     / "retry"
+                                     / "return"
                                      / "self"
                                      / "super"
                                      / "then"
                                      / "true"
                                      / "undef"
-IdentifierName                       = { IDENTIFIER #Name }
-IDENTIFIER                           = !KEYWORD IDENTIFIER_START IDENTIFIER_PART*
-IDENTIFIER_START                     = [a-zA-Z$_]
-                                     / UCHAR
-IDENTIFIER_PART                      = IDENTIFIER_START
-                                     / DIGIT
-DIGIT                                = [0-9_]
-LHSExpandExpression                  = { '*' $(LeftHandSideExpression) #Sprat }
-MultipleRightHandSideExpression      = { addArgs ( _ ',' _ $(ExpandExpression) )? #MultipleRightHandSideExpression }
-                                     / { $(ExpandExpression) #MultipleRightHandSideExpression }
-ExpandExpression                     = { '*' $(Arg) #Sprat }
-KeywordLogicalExpression             = KeywordNotExpression {$ __ addKeywordLogicalOperator __ $(KeywordLogicalOperandWithControl) #And }*
-KeywordNotExpression                 = CommandNotExpression
-                                     / AssignmentExpression
-                                     / { __ "not" #Not _ $(KeywordNotExpression) }
-CommandNotExpression                 = Command
-                                     / { __ "!" #Not _ $(CommandNotExpression) }
-KeywordOperator                      = { ' ' }
+                                     / "unless"
+                                     / "until"
+                                     / "when"
+                                     / "while"
+                                     / "yield"
+                                     / "BEGIN"
+                                     / "END"
+                                     / "__LINE__"
+                                     / "__ENCODING__"
+                                     / "__FILE__"
 
-/////////////////////////////////////////
-addKeywordLogicalOperator            = "and" #And
-                                     / "or" #Or
-KeywordLogicalOperandWithControl     = KeywordNotExpression
-                                     / ControlExpression
-ControlExpression                    = ReturnExpression
-                                     / BreakExpression
-                                     / NextExpression
-                                     / RedoExpression
-                                     / YieldExpression
-ReturnExpression                     = { "return" _ '(' _ $(CallArgs) _ ')' #Return }
-                                     / { "return" ( _ $(CmdArgs) )? #Return }
-BreakExpression                      = { "break" _ '(' _ $(CallArgs) _ ')' #Break }
-                                     / { "break" ( _ $(CmdArgs) )? #Break }
-NextExpression                       = { "next" _ '(' _ $(CallArgs) _ ')' #Next }
-                                     / { "next" ( _ $(CmdArgs) )? #Next }
-RedoExpression                       = { "redo" _ '(' _ $(CallArgs) _ ')' #Redo }
-                                     / { "redo" ( _ $(CmdArgs) )? #Redo }
-YieldExpression                      = { "yield" _ '(' _ $(CallArgs) _ ')' #Redo }
-                                     / { "yield" ( _ $(CmdArgs) )? #Redo }
 W                                    = [a-zA-Z0-9_]
                                      / UCHAR
 UCHAR                                = '\\u' HEX4
                                      / '\\U' HEX4 HEX4
 HEX4                                 = HEX HEX HEX HEX
 HEX                                  = [0-9a-fA-F_]
-"&"                                  = '&' !'&'
-"*"                                  = '*' !'='
+"&"                                  = '&' ![&=]
+"&&"                                 = '&&' ![=]
+"*"                                  = '*' ![*=]
 "+"                                  = '+' ![+=]
 "-"                                  = '-' !( '-' / [=>] )
 "!"                                  = '!' ![=~]
-":"                                  = ':' ![>]
+":"                                  = ':' ![>:]
 "/"                                  = '/' !'='
 "%"                                  = '%' ![=>]
 "<<"                                 = '<<' !'='
 ">>"                                 = '>>' ![=>]
-"<"                                  = '<' ![=]
-">"                                  = '>' ![=]
+"<"                                  = '<' ![<=]
+">"                                  = '>' ![=>]
 "=="                                 = '==' ![=]
-"!="                                 = '!=' ![=]
+"!="                                 = '!='
+"!~"                                 = '!~'
 "^"                                  = '^' ![=]
-"|"                                  = '|' ![=]
-"="                                  = '=' ![=~]
+"|"                                  = '|' ![|=]
+"||"                                 = '||' ![=]
+"="                                  = '=' ![=>~]
 "<=>"                                = '<=>'
 "==="                                = '==='
 "=~"                                 = '=~'
@@ -602,12 +713,27 @@ HEX                                  = [0-9a-fA-F_]
 "`"                                  = '`'
 "+@"                                 = '+@'
 "-@"                                 = '-@'
-"[]"                                 = '[]'
+"[]"                                 = '[]' ![=]
 "[]="                                = '[]='
 "("                                  = '('
 "=>"                                 = '=>'
 "."                                  = '.'
 ","                                  = ','
+"&&="                                = '&&='
+"||="                                = '||='
+"^="                                 = '^='
+"&="                                 = '&='
+"|="                                 = '|='
+"<<="                                = '<<='
+">>="                                = '>>='
+"+="                                 = '+='
+"-="                                 = '-='
+"*="                                 = '*='
+"/="                                 = '/='
+"%="                                 = '%='
+"**="                                = '**='
+"=begin"                             = '=begin' !W
+"=end"                               = '=end' !W
 "do"                                 = 'do' !W
 "end"                                = 'end' !W
 "return"                             = 'return' !W
@@ -635,7 +761,6 @@ HEX                                  = [0-9a-fA-F_]
 "def"                                = 'def' !W
 "alias"                              = 'alias' !W
 "and"                                = 'and' !W
-"defined"                            = 'defined' !W
 "false"                              = 'false' !W
 "nil"                                = 'nil' !W
 "not"                                = 'not' !W
@@ -645,5 +770,10 @@ HEX                                  = [0-9a-fA-F_]
 "then"                               = 'then' !W
 "true"                               = 'true' !W
 "undef"                              = 'undef' !W
+"BEGIN"                              = 'BEGIN' !W
+"END"                                = 'END' !W
+"__LINE__"                           = '__LINE__' !W
+"__ENCODING__"                       = '__ENCODING__' !W
+"__FILE__"                           = '__FILE__' !W
 
 // formatted by $ nez format
