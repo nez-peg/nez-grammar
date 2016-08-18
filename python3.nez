@@ -22,17 +22,17 @@ EOF                                 = !.
 // ====================
 // Def
 // ====================
-FuncDef                             = { "def" __ $(Name) __ $(Parameters) $({ ( _ '->' _ $(Test) )? #Arrow }) __ ':' __ $(Suite) #Function }
+FuncDef                             = { "def" __ $name(Name) __ $param(Parameters) $({ ( _ '->' _ $cond(Test) )? #Arrow }) __ ':' __ $body(Suite) #Function }
 Parameters                          = { '(' <on InParentheses ( __ $(ParameterList)? __ )> ')' #Apply }
 ParameterList                       = { '**' _ $(Parameter) #Params }
                                     / { '*' ( _ $(Parameter) )? ( __ ',' __ $(Parameter) )* ( __ ',' __ '**' _ $(Parameter) )? #Params }
                                     / { ( $(DefParameter) ( __ ',' __ $(DefParameter) )* )? ( __ ',' __ ('**' _ $(Parameter) / '*' ( _ $(Parameter) )? ( __ ',' __ $(Parameter) )* ( __ ',' __ '**' _ $(Parameter) )?) )? ( __ ',' )? #Params }
-DefParameter                        = Parameter {$ __ '=' __ $(Test) #Initialize }?
-Parameter                           = Name {$ __ ':' __ $(Test) #KeyValue }?
+DefParameter                        = Parameter {$name __ '=' __ $expr(Test) #Initialize }?
+Parameter                           = Name {$key __ ':' __ $value(Test) #KeyValue }?
 VarArgList                          = { '**' _ $(VarArg) #VarArgs }
                                     / { '*' ( _ $(VarArg) )? ( __ ',' __ $(VarArg) )* ( __ ',' __ '**' _ $(VarArg) )? #VarArgs }
                                     / { ( $(DefVarArg) ( __ ',' __ $(DefVarArg) )* )? ( __ ',' __ ('**' _ $(VarArg) / '*' ( _ $(VarArg) )? ( __ ',' __ $(VarArg) )* ( __ ',' __ '**' _ $(VarArg) )?) )? ( __ ',' )? #VarArgs }
-DefVarArg                           = VarArg {$ __ '=' __ $(Test) #Initialize }?
+DefVarArg                           = VarArg {$name __ '=' __ $expr(Test) #Initialize }?
 VarArg                              = Name
 
 // ====================
@@ -56,7 +56,7 @@ SmallStatement                      = ExprStatement
                                     / GlobalStatement
                                     / NonLocalStatement
                                     / AssertStatement
-DelStatement                        = { "del" __ $(TestList) #Delete }
+DelStatement                        = { "del" __ $expr(TestList) #Delete }
 PassStatement                       = { "pass" #Pass }
 FlowStatement                       = BreakStatement
                                     / ContinueStatement
@@ -65,26 +65,26 @@ FlowStatement                       = BreakStatement
                                     / YieldStatement
 BreakStatement                      = { "break" #Break }
 ContinueStatement                   = { "continue" #Continue }
-ReturnStatement                     = { "return" ( __ $(TestList) )? #Return }
-RaiseStatement                      = { "raise" ( __ $(TestList) ( __ $({ "from" __ $(Test) #From }) )? )? #Raise }
+ReturnStatement                     = { "return" ( __ $expr(TestList) )? #Return }
+RaiseStatement                      = { "raise" ( __ $expr(TestList) ( __ $({ "from" __ $expr(Test) #From }) )? )? #Raise }
 YieldStatement                      = YieldExpr
 ImportStatement                     = ImportName
                                     / ImportFrom
-ImportName                          = { "import" __ $(DottedAsNames) #Import }
+ImportName                          = { "import" __ $name(DottedAsNames) #Import }
 ImportFrom                          = { $({ "from" __ ('.'* $(Module) / '.'+) #From }) __ $({ "import" __ ('(' <on InParentheses ( __ $(ImportList) ( _ ',' )? __ )> ')' / $(ImportList) / '*') #Import }) #FromImport }
 
 // { @{"from" __ @Module #From } __ @{"import" __ '*' #Import } #FromImport }
 Module                              = { ( $(Name) '.' )* $(Name) #Field }
 ImportList                          = ImportAsName {$ ( __ ',' __ $(ImportAsName) )+ #List }?
-ImportAsName                        = Name {$ __ "as" __ $(Name) #As }?
+ImportAsName                        = Name {$ __ "as" __ $name(Name) #As }?
 DottedAsNames                       = DottedAsName {$ ( __ ',' __ $(DottedAsName) )+ #List }?
-DottedAsName                        = DottedName {$ __ "as" __ $(Name) #As }?
+DottedAsName                        = DottedName {$ __ "as" __ $name(Name) #As }?
 DottedName                          = Name {$ ( __ '.' __ $(Name) )+ #Field }?
-GlobalStatement                     = { "global" __ $(NameList) #Global }
-NonLocalStatement                   = { "nonlocal" __ $(NameList) #NonLocal }
+GlobalStatement                     = { "global" __ $label(NameList) #Global }
+NonLocalStatement                   = { "nonlocal" __ $label(NameList) #NonLocal }
 NameList                            = Name {$ ( __ ',' __ $(Name) )+ #List }?
 AssertStatement                     = { "assert" __ $(AssertTest) #Assert }
-AssertTest                          = Test {$ __ ',' __ $(Test) #List }?
+AssertTest                          = Test {$cond __ ',' __ $msg(Test) #List }?
 CompoundStatement                   = IfStatement
                                     / WhileStatement
                                     / ForStatement
@@ -93,25 +93,25 @@ CompoundStatement                   = IfStatement
                                     / FuncDef
                                     / ClassDef
                                     / Decorated
-IfStatement                         = { "if" __ $(Test) __ ':' __ $(Suite) ( <match Indent> $(Elif) )* ( <match Indent> $(Else) )? #If }
-Elif                                = { "elif" __ $(Test) __ ':' __ $(Suite) #Elif }
-Else                                = { "else" __ ':' __ $(Suite) #Else }
-WhileStatement                      = { "while" __ $(Test) __ ':' __ $(Suite) ( <match Indent> $(Else) )? #While }
-ForStatement                        = { "for" __ $(ExprList) __ "in" __ $(TestList) __ ':' __ $(Suite) ( <match Indent> $(Else) )? #For }
-TryStatement                        = { "try" __ ':' __ $(Suite) (( <match Indent> $(Except) )+ ( <match Indent> $(Else) )? ( <match Indent> $(Finally) )? / <match Indent> $(Finally)) #Try }
-Except                              = { "except" ( __ $(TestList) ( __ $({ "as" __ $(Name) #As }) )? )? __ ':' __ $(Suite) #Except }
-Finally                             = { "finally" __ ':' __ $(Suite) #Finally }
-WithStatement                       = { "with" __ $(WithItemList) __ ':' __ $(Suite) #With }
+IfStatement                         = { "if" __ $cond(Test) __ ':' __ $then(Suite) ( <match Indent> $(Elif) )* ( <match Indent> $(Else) )? #If }
+Elif                                = { "elif" __ $cond(Test) __ ':' __ $then(Suite) #Elif }
+Else                                = { "else" __ ':' __ $then(Suite) #Else }
+WhileStatement                      = { "while" __ $cond(Test) __ ':' __ $body(Suite) ( <match Indent> $(Else) )? #While }
+ForStatement                        = { "for" __ $name(ExprList) __ "in" __ $iter(TestList) __ ':' __ $body(Suite) ( <match Indent> $(Else) )? #For }
+TryStatement                        = { "try" __ ':' __ $try(Suite) (( <match Indent> $(Except) )+ ( <match Indent> $(Else) )? ( <match Indent> $(Finally) )? / <match Indent> $(Finally)) #Try }
+Except                              = { "except" ( __ $expr(TestList) ( __ $({ "as" __ $name(Name) #As }) )? )? __ ':' __ $body(Suite) #Except }
+Finally                             = { "finally" __ ':' __ $finally(Suite) #Finally }
+WithStatement                       = { "with" __ $(WithItemList) __ ':' __ $body(Suite) #With }
 WithItemList                        = WithItem {$ ( __ ',' __ $(WithItem) )+ #List }?
-WithItem                            = Test {$ __ "as" __ $(Expr) #As }?
+WithItem                            = Test {$expr __ "as" __ $name(Expr) #As }?
 Suite                               = { $(SimpleStatement) #Block }
                                     / NEWLINE ( _ EOS )* { <block ( <symbol Indent> $(Statement) ( <match Indent> $(Statement) / _ EOS )* )> #Block }
 
 // ====================
 //      Expression
 // ====================
-ExprStatement                       = TestListStarExpr {$ __ addAssignOp __ ($(YieldExpr) / $(TestList)) }
-                                    / TestListStarExpr {$ __ '=' __ ($(YieldExpr) / $(TestListStarExpr)) #Equals }*
+ExprStatement                       = TestListStarExpr {$left __ addAssignOp __ ($right(YieldExpr) / $right(TestList)) }
+                                    / TestListStarExpr {$left __ '=' __ ($right(YieldExpr) / $right(TestListStarExpr)) #Equals }*
 addAssignOp                         = '+=' #Addeq
                                     / '-=' #Subeq
                                     / '*=' #Muleq
@@ -132,13 +132,13 @@ Test                                = OrTest {$ __ "if" __ $(OrTest) __ "else" _
                                     / LambDef
 TestNoCond                          = OrTest
                                     / LambDefNoCond
-LambDef                             = { "lambda" __ $(VarArgList)? __ ':' __ $(Test) #Lambda }
-LambDefNoCond                       = { "lambda" __ $(VarArgList)? __ ':' __ $(TestNoCond) #Lambda }
-OrTest                              = AndTest {$ __ "or" __ $(AndTest) #OrTest }*
-AndTest                             = NotTest {$ __ "and" __ $(NotTest) #AndTest }*
-NotTest                             = { "not" __ $(NotTest) #NotTest }
+LambDef                             = { "lambda" __ $param(VarArgList)? __ ':' __ $body(Test) #Lambda }
+LambDefNoCond                       = { "lambda" __ $param(VarArgList)? __ ':' __ $body(TestNoCond) #Lambda }
+OrTest                              = AndTest {$left __ "or" __ $right(AndTest) #OrTest }*
+AndTest                             = NotTest {$left __ "and" __ $right(NotTest) #AndTest }*
+NotTest                             = { "not" __ $expr(NotTest) #NotTest }
                                     / Comparison
-Comparison                          = StarExpr {$ __ addCompOp __ $(StarExpr) }*
+Comparison                          = StarExpr {$left __ addCompOp __ $right(StarExpr) }*
 addCompOp                           = '>=' #GreaterThanEquals
                                     / '<=' #LessThanEquals
                                     / '<' !'<' #LessThan
@@ -150,16 +150,16 @@ addCompOp                           = '>=' #GreaterThanEquals
                                     / "is" __ "not" #IsNot
                                     / "is" #Is
 StarExpr                            = '*'? Expr
-Expr                                = XOrExpr {$ __ '|' !'|' __ $(XOrExpr) #OrExpr }*
-XOrExpr                             = AndExpr {$ __ '^' __ $(AndExpr) #XOrExpr }*
-AndExpr                             = ShiftExpr {$ __ '&' !'&' __ $(ShiftExpr) #AndExpr }*
-ShiftExpr                           = ArithExpr {$ __ ('<<' #LeftShiftExpr / '>>' #RightShiftExpr) __ $(ArithExpr) }*
-ArithExpr                           = Term {$ __ ('+' #Add / '-' #Sub) __ $(Term) }*
-Term                                = Factor {$ __ ('*' #Mul / '%' #Mod / '//' #FloorDiv / '/' #Div) __ $(Factor) }*
-Factor                              = { ('+' #Plus / '-' #Minus / '~' #Compl) __ $(Factor) }
+Expr                                = XOrExpr {$left __ '|' !'|' __ $right(XOrExpr) #OrExpr }*
+XOrExpr                             = AndExpr {$left __ '^' __ $right(AndExpr) #XOrExpr }*
+AndExpr                             = ShiftExpr {$lelf __ '&' !'&' __ $right(ShiftExpr) #AndExpr }*
+ShiftExpr                           = ArithExpr {$left __ ('<<' #LeftShiftExpr / '>>' #RightShiftExpr) __ $right(ArithExpr) }*
+ArithExpr                           = Term {$left __ ('+' #Add / '-' #Sub) __ $right(Term) }*
+Term                                = Factor {$left __ ('*' #Mul / '%' #Mod / '//' #FloorDiv / '/' #Div) __ $right(Factor) }*
+Factor                              = { ('+' #Plus / '-' #Minus / '~' #Compl) __ $expr(Factor) }
                                     / Power
-Power                               = AtomTrailer {$ __ '**' __ $(Factor) #Power }?
-AtomTrailer                         = Atom {$ __ addTrailer }*
+Power                               = AtomTrailer {$left __ '**' __ $right(Factor) #Power }?
+AtomTrailer                         = Atom {$recv __ addTrailer }*
 Atom                                = '(' <on InParentheses ( __ { ( $(YieldExpr) / $(TestListComp) )? #Atom } __ )> ')'
                                     / '[' <on InParentheses ( __ { $(TestListComp)? #Atom } __ )> ']'
                                     / '{' <on InParentheses ( __ { $(DictorsetMaker)? #Atom } __ )> '}'
@@ -172,16 +172,16 @@ Atom                                = '(' <on InParentheses ( __ { ( $(YieldExpr
                                     / True
                                     / False
 TestListComp                        = { $(Test) __ ($(CompFor) / ( ',' __ $(Test) __ )* __ ','?) #List }
-addTrailer                          = '(' <on InParentheses ( __ $(ArgList)? __ )> ')' #Apply
+addTrailer                          = '(' <on InParentheses ( __ $param(ArgList)? __ )> ')' #Apply
                                     / '[' <on InParentheses ( __ $(SubScriptList) __ )> ']' #Array
-                                    / '.' __ $(Name) #Field
+                                    / '.' __ $name(Name) #Field
 SubScriptList                       = SubScript {$ ( __ ',' __ $(SubScript) )+ #List }? __ ','?
 SubScript                           = { $(Test)? __ ':' __ $(Test)? __ addSliceOp? #KeyValue }
                                     / Test
 addSliceOp                          = ':' $(Test)?
 ExprList                            = { $(StarExpr) ( __ ',' __ $(StarExpr) )* __ ','? #List }
 DictorsetMaker                      = { $(Test) __ (':' __ $(Test) __ ($(CompFor) / ( ',' __ $(Test) __ ':' __ $(Test) __ )* ','?) / $(CompFor) / ( ',' __ $(Test) __ )* ','?) #Set }
-ClassDef                            = { "class" __ $(Name) __ ( '(' <on InParentheses ( __ $(ArgList) __ )> ')' __ )? ':' __ $(Suite) #Class }
+ClassDef                            = { "class" __ $name(Name) __ ( '(' <on InParentheses ( __ $super(ArgList) __ )> ')' __ )? ':' __ $body(Suite) #Class }
 ArgList                             = { '**' _ $(Test) #Args }
                                     / { '*' ( _ $(Test) )? ( __ ',' __ Argument )* ( __ ',' __ '**' _ $(Test) )? #Args }
                                     / { ( Argument ( __ ',' __ Argument )* )? ( __ ',' __ ('**' _ $(Test) / '*' ( _ $(Test) )? ( __ ',' __ Argument )* ( __ ',' __ '**' _ $(Test) )?) )? ( __ ',' )? #Args }
@@ -189,9 +189,9 @@ Argument                            = $({ $(Test) ( __ $(CompFor) )? __ '=' __ $
                                     / $(Test) ( __ $(CompFor) )?
 CompIter                            = CompFor
                                     / CompIf
-CompFor                             = { "for" __ $(ExprList) __ "in" __ $(OrTest) !( _ ',' ) !( _ ':' ) ( __ $(CompIter) )? #For }
+CompFor                             = { "for" __ $name(ExprList) __ "in" __ $iter(OrTest) !( _ ',' ) !( _ ':' ) ( __ $body(CompIter) )? #For }
 CompIf                              = { "if" __ $(TestNoCond) ( __ $(CompIter) )? #if }
-YieldExpr                           = { "yield" __ $(YieldArg)? #Yield }
+YieldExpr                           = { "yield" __ $expr(YieldArg)? #Yield }
 YieldArg                            = { "from" __ $(Test) #From }
                                     / TestList
 NoParenthesesArgumentList_FuncCall  = Name {$ _ !( KEYWORD S+ / '(' / ',' ) Argument #Apply }
