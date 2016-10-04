@@ -3,7 +3,12 @@
  * author : Mai MaiCuong
  *        : Masanori Sato
 */
+
 File                                 = BRANKLINE* _ { $(CompleteStatement) #Source }
+
+/* for comsumed check */
+//File                                 = BRANKLINE* _ { $(CompleteStatement) ("__END__"/!.) $(Comsumed) #Source }
+//Comsumed                             = { `comsumed` #Comsumed }
 
 //-----------------------------------------
 EOS                                  = _ (';' / COMMENT? LINE_TERMINATOR) BRANKLINE*
@@ -30,7 +35,9 @@ Block                                = <if !Nondo>  DoEndBlock
                                      / <on !onlyDecorator BraceBlock>
 DoEndBlock                           = { "do" __ $param(BlockParameter)? __ $body(CompleteStatement) __ "end" #Block }
 BraceBlock                           = { '{' __ $param(BlockParameter)? __ $body(CompleteStatement) __ '}' #Block }
-BlockParameter                       = '|' __ ( BlockVar / { #Empty } / { addParameterList #List} ) __ '|'
+BlockParameter                       = '|' __ BlockVar __ '|'
+                                     / '|' __ { #Empty } __ '|'
+                                     / '|' __ { addParameterList #List } __ '|'
 BlockVar                             = MultipleLeftHandSideExpression
                                      / LeftHandSideExpression
 BodyStatement                        = { addBodyStatements #BlockExpr }
@@ -92,12 +99,12 @@ LeftHandForAssignSingle              = { $base(PrimaryExpressionForLeftHand) add
                                      / PrimaryTarget
 LeftHandForAssignCalc                = { $base(PrimaryExpressionForLeftHand) addTargetForAssignCalc }
                                      / VariableName
-addTarget                            = ROW_CONNECTION* '[' __ $index(IndexArguments)? __ ']' #Indexer
+addTarget                            = _ '[' __ $index(IndexArguments)? __ ']' #Indexer
                                      / ( __ '.' / _ '::') __ $name(Identifier) #Field
-addTargetForAssignSingle             = ROW_CONNECTION* '[' __ $index(IndexArguments)? __ ']' #Indexer
+addTargetForAssignSingle             = _ '[' __ $index(IndexArguments)? __ ']' #Indexer
                                      / ( __ '.' / _ '::') __ $name(LocalIdentifier) #Field
                                      / ( __ '.' / '::') __ $name(ConstantIdentifier) #Field
-addTargetForAssignCalc               = ROW_CONNECTION* '[' __ $index(IndexArguments)? __ ']' #Indexer
+addTargetForAssignCalc               = _ '[' __ $index(IndexArguments)? __ ']' #Indexer
                                      / __ '.' __ $name(Identifier) #Field
                                      / _ '::' __ $name(LocalIdentifier) #Field
 PrimaryTarget                        = VariableName
@@ -188,10 +195,10 @@ addUnaryOperator                     = "+" #Plus
                                      / "~" #ComplExpr
                                      / "!" #NotExpr
 PrimaryExpression                    = Primary {$recv addCall }*
-PrimaryExpressionForLeftHand         = Primary {$recv addCall &( ( ROW_CONNECTION* '[' / __ '.' / _ '::') ) }*
+PrimaryExpressionForLeftHand         = Primary {$recv addCall &( ( _ '[' / __ '.' / _ '::') ) }*
 PrimaryExpressionForCommand          = Primary {$recv addCall &( __ ('.' / '::') ) }* // TODO [ . .
 PrimaryExpressionForPath             = Primary {$recv addCall &( _ '::' ) }* // TODO . . ::
-addCall                              = ROW_CONNECTION* '[' __ $index(IndexArguments)? __ ']' #Indexer
+addCall                              = _ '[' __ $index(IndexArguments)? __ ']' #Indexer
                                      / _ '::' __ $recv(MethodName) _ $param(Arguments) ( _ $body(Block) )? #ApplyExpr
                                      / __ '.' __ $recv(MethodName) _ $param(Arguments)? ( _ $body(Block) )? #ApplyExpr
                                      / _ '::' __ !CONSTANT $recv(MethodName) ( _ $body(Block) )? #ApplyExpr
@@ -306,7 +313,7 @@ Arguments                            = '(' __ ')' { #Empty }
 
 ArgumentsWithoutParenetheses         = !addFaultAvoider _ { addArgumentList #List } //!( _ '{' )
 addFaultAvoider                      = [(&+*/%]
-                                     / '<<' / '-' / '['
+                                     / '<<' / '-' / _ '['
                                      / _ [&+*/%] SP
                                      / _ ( '<<' / '-' ) SP
 addArgumentList                      = $command(Command)
@@ -366,6 +373,8 @@ DoubleStringCharacter                = !( ["] / '\\' / '#' ) SOURCE
                                      / '#' ![$@{]
                                      / '\\' ESCAPE_SEQUENCE
                                      / '#' InnerExpression
+                                     / '#' MatchedRegex
+                                     / '#' BuiltInVariable
 InnerExpression                      = ( '$' / '@' / '@@' ) $inner(Identifier)
                                      / '{' __ $inner(CompleteStatement) __ '}'
 SOURCE                               = .
@@ -406,7 +415,7 @@ PN_BODY                              = '(' PN_PAREN ')'
                                      / <block ( <symbol PN_DELIMITER> ( !<match PN_DELIMITER> . )* <match PN_DELIMITER> )>
 PN_PAREN                             = ( '(' PN_PAREN ')' / ![()] . )*
 PN_BRACE                             = ( '{' PN_BRACE '}' / ![{}] . )*
-PN_BRAKET                            = ( '[' PN_BRAKET ']' / ![\[\]] . )*
+PN_BRAKET                            = ( '[' PN_BRAKET ']' / !('['/']') . )*
 PN_ANGLE                             = ( '<' PN_ANGLE '>' / ![<>] . )*
 PN_DELIMITER                         = ![_0-9a-zA-Z] .
 HereDocument                         = <block ( "<<" <symbol HD_DELIMITER> ( !LINE_TERMINATOR . )* LINE_TERMINATOR { HD_BODYLINE* #HereDocument } HD_ENDLINE )>
@@ -832,6 +841,7 @@ KEYWORD                              = "alias"
                                      / "yield"
                                      / "BEGIN"
                                      / "END"
+                                     / "__END__"
                                      / "__LINE__"
                                      / "__ENCODING__"
                                      / "__FILE__"
@@ -931,6 +941,7 @@ HEX                                  = [0-9a-fA-F_]
 "undef"                              = 'undef' !W
 "BEGIN"                              = 'BEGIN' !W
 "END"                                = 'END' !W
+"__END__"                            = '__END__' !W
 "__LINE__"                           = '__LINE__' !W
 "__ENCODING__"                       = '__ENCODING__' !W
 "__FILE__"                           = '__FILE__' !W
