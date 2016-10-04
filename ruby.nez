@@ -292,13 +292,22 @@ DefinedFunctionName                  = AssignmentLikeMethodName
 FunctionParameters                   = '(' { __ addParameterList? #List } __ ')' EOS?
                                      / { addParameterList? #List } EOS
 // TODO add ruby 2.0 expression ( keyword arguments, option hash)
-addParameterList                     = $papam(ProcedureParameter)
-                                     / $param(VariadicParameter) ( __ ',' __ $param(ProcedureParameter) )?
-                                     / addOptionalParameters ( __ ',' __ $param(VariadicParameter) )? ( __ ',' __ $param(ProcedureParameter) )?
+addParameterList                     = $param(ProcedureParameter)
+                                     / $param(OptionHashParameter) ( __ ',' __ $param(ProcedureParameter) )?
+                                     / addKeywordParameters ( __ ',' __ $param(OptionHashParameter) )? ( __ ',' __ $param(ProcedureParameter) )?
+                                     / $param(VariadicParameter) ( __ ',' __ addParameterList2 )?
+                                     / addOptionalParameters ( __ ',' __ $param(VariadicParameter) )? ( __ ',' __ addParameterList2 )?
                                      / $param( { $name(LocalIdentifier) #Param } ) ( __ ',' __ addParameterList )?
+addParameterList2                    = $param(ProcedureParameter)
+                                     / $param(OptionHashParameter) ( __ ',' __ $param(ProcedureParameter) )?
+                                     / addKeywordParameters ( __ ',' __ $param(OptionHashParameter) )? ( __ ',' __ $param(ProcedureParameter) )?
+                                     / $param( { $name(LocalIdentifier) #Param } ) ( __ ',' __ addParameterList2 )?
 addOptionalParameters                = $param(OptionalParameter) ( __ ',' __ $param(OptionalParameter) )*
 OptionalParameter                    = { $name(LocalIdentifier) __ "=" __ $default(OperatorExpression) #OptionalParam }
 VariadicParameter                    = { "*" ( __ $name(LocalIdentifier) )? #VariadicParam }
+addKeywordParameters                 = $param(KeywordParameter) ( __ ',' __ $param(KeywordParameter) )*
+KeywordParameter                     = { $name(LocalIdentifier) ":" ( __ $default(OperatorExpression) )? #KeywordParam }
+OptionHashParameter                  = { "**" ( __ $name(LocalIdentifier) )? #OptionHashParam }
 ProcedureParameter                   = { "&" __ $name(LocalIdentifier) #ProcedureParam }
 TargetClass                          = VariableName
                                      / PseudoVariable
